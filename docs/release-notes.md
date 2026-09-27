@@ -15,6 +15,10 @@ YARA saves them and restarts. Bridge mode enables Reticulum transport. The
 settings are stored in `~/.yara/settings.json` (`%USERPROFILE%\.yara\settings.json`
 on Windows). See the [setup guide](https://github.com/FreeTAKTeam/YARA/blob/main/docs/rust-poc.md).
 
+The interface form sets frequency, bandwidth, spreading factor, coding rate,
+and transmit power. It does not set the RNode preamble; configure and verify
+the desired 20-symbol preamble on the RNode separately.
+
 These unsigned builds are for interoperability testing. Windows SmartScreen
 and macOS Gatekeeper may require an explicit user override. Voice calls and
 NomadNet are outside this POC. Hardware and cross-platform chat behavior must

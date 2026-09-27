@@ -16,7 +16,9 @@ enter the serial port and radio values, then click **Save and restart**. Use a
 Windows COM port such as `COM3`, a macOS `/dev/cu.*` path, or the Pi's
 `/dev/ttyUSB*` path. The initial radio values are 915 MHz, 500 kHz, SF 10,
 coding rate 4/5, and 22 dBm; confirm that they match the attached RNode and
-your local radio rules. Bridge mode enables Reticulum transport. The settings
+your local radio rules. YARA does not set the RNode preamble; configure and
+verify the requested 20-symbol preamble on the RNode separately. Bridge mode
+enables Reticulum transport. The settings
 file can also be edited directly when running without Electron. The daemon
 and UI bind to `127.0.0.1:9337`; remote browser access is not part of this
 release.
