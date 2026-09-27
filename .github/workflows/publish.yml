@@ -1,0 +1,49 @@
+name: Publish YARA prerelease
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing release tag
+        required: true
+        type: string
+      artifact_run_id:
+        description: Successful tagged build run ID
+        required: true
+        type: string
+
+permissions:
+  actions: read
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out release notes
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag }}
+      - name: Download tagged build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          run-id: ${{ inputs.artifact_run_id }}
+          github-token: ${{ github.token }}
+          pattern: yara-*
+          path: release-assets
+          merge-multiple: true
+      - name: Publish installer files
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+        run: |
+          mapfile -t assets < <(find release-assets -maxdepth 1 -type f \
+            \( -name '*.exe' -o -name '*.zip' -o -name '*.AppImage' \) | sort)
+          test "${#assets[@]}" -eq 4
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" "${assets[@]}" --clobber
+            gh release edit "$TAG" --draft=false --prerelease
+          else
+            gh release create "$TAG" "${assets[@]}" --verify-tag --prerelease \
+              --title "YARA $TAG" --notes-file docs/release-notes.md
+          fi
