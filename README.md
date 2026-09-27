@@ -92,8 +92,9 @@ npm run build-frontend
 ```
 
 Open `http://127.0.0.1:9337`. See the [Rust POC guide](docs/rust-poc.md) for
-serial RNode and TCP plus LoRa transport settings. No packaged YARA release
-is available yet.
+serial RNode and TCP plus LoRa transport settings. Portable test builds for
+Windows, macOS, and 64-bit Raspberry Pi are published under
+[YARA releases](https://github.com/FreeTAKTeam/YARA/releases).
 
 ## Related projects
 

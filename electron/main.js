@@ -2,14 +2,38 @@ const { app, BrowserWindow, dialog, ipcMain, shell, systemPreferences } = requir
 const electronPrompt = require('electron-prompt');
 const { spawn } = require('child_process');
 const fs = require('fs');
+const net = require('node:net');
 const path = require('node:path');
+const { prepareLaunch, readSettings, saveSettings } = require('./rust-poc-launcher');
 
 // remember main window
 var mainWindow = null;
+var quitting = false;
+var rustPlan = null;
 
 // remember child process for exe so we can kill it when app exits
 var exeChildProcess = null;
-const rustPoc = process.env.MESHCHAT_RUST_POC === '1';
+const rustPoc = app.isPackaged || process.env.MESHCHAT_RUST_POC === '1';
+const serverUrl = `http://${rustPoc ? (process.env.RUST_POC_BIND || '127.0.0.1:9337') : '127.0.0.1:9337'}`;
+
+ipcMain.handle('server-url', () => serverUrl);
+ipcMain.handle('rust-settings', () => {
+    if(!rustPoc || !rustPlan) throw new Error('Rust settings are not available');
+    return readSettings(rustPlan.stateDir);
+});
+ipcMain.handle('rust-settings-save', (event, value) => {
+    if(!rustPoc || !rustPlan) throw new Error('Rust settings are not available');
+    return saveSettings(rustPlan.settingsFile, value);
+});
+
+function assertPortAvailable(bind) {
+    const [host, port] = bind.split(':');
+    return new Promise((resolve, reject) => {
+        const server = net.createServer();
+        server.once('error', () => reject(new Error(`Port ${bind} is already in use. Close the other MeshChat/YARA instance or set RUST_POC_BIND.`)));
+        server.listen(Number(port), host, () => server.close(resolve));
+    });
+}
 
 // allow fetching app version via ipc
 ipcMain.handle('app-version', () => {
@@ -124,6 +148,19 @@ app.whenReady().then(async () => {
     const ignoredArguments = ["--no-sandbox", "--ozone-platform-hint=auto"];
     const userProvidedArguments = process.argv.slice(1).filter((arg) => !ignoredArguments.includes(arg));
     const shouldLaunchHeadless = userProvidedArguments.includes("--headless");
+    if(rustPoc){
+        try {
+            rustPlan = prepareLaunch({
+                packaged: app.isPackaged,
+                resourcesPath: process.resourcesPath,
+            });
+            await assertPortAvailable(rustPlan.bind);
+        } catch(error) {
+            dialog.showErrorBox('YARA startup failed', error.message);
+            app.quit();
+            return;
+        }
+    }
 
     if(!shouldLaunchHeadless){
 
@@ -181,8 +218,7 @@ app.whenReady().then(async () => {
 
     try {
         if(rustPoc){
-            const launcher = path.join(__dirname, '..', 'scripts', 'run-rust-poc.sh');
-            exeChildProcess = spawn(launcher, [process.env.MESHCHAT_RUST_POC_MODE || 'tcp']);
+            exeChildProcess = spawn(rustPlan.binary, rustPlan.args, { windowsHide: true });
         } else {
             // find path to python/cxfreeze reticulum meshchat executable
             const exeName = process.platform === "win32" ? "ReticulumMeshChat.exe" : "ReticulumMeshChat";
@@ -238,10 +274,15 @@ app.whenReady().then(async () => {
         // log errors
         exeChildProcess.on('error', function(error) {
             log(error);
+            dialog.showErrorBox('YARA startup failed', error.message);
+            app.quit();
         });
 
         // quit electron app if exe dies
         exeChildProcess.on('exit', async function(code) {
+            if(quitting){
+                return;
+            }
 
             // if no exit code provided, we wanted exit to happen, so do nothing
             if(code == null){
@@ -262,7 +303,7 @@ app.whenReady().then(async () => {
             const stderr = stderrLines.join("");
             await dialog.showMessageBox(mainWindow, {
                 message: [
-                    "MeshChat Crashed!",
+                    "YARA backend stopped",
                     "",
                     `Exit Code: ${code}`,
                     "",
@@ -282,28 +323,20 @@ app.whenReady().then(async () => {
 
     } catch(e) {
         log(e);
+        dialog.showErrorBox('YARA startup failed', e.message);
+        app.quit();
     }
 
 });
 
-function quit() {
-
-    // stop the backend process
+app.on('before-quit', () => {
+    quitting = true;
     if(exeChildProcess){
         exeChildProcess.kill(rustPoc ? "SIGTERM" : "SIGKILL");
+        exeChildProcess = null;
     }
-
-    // quit electron app
-    app.quit();
-
-}
-
-// quit electron if all windows are closed
-app.on('window-all-closed', () => {
-    quit();
 });
 
-// make sure child process is killed if app is quiting
-app.on('quit', () => {
-    quit();
+app.on('window-all-closed', () => {
+    app.quit();
 });

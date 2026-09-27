@@ -1,160 +1,116 @@
-name: Build and Release
+name: YARA portable release
 
 on:
+  workflow_dispatch:
   push:
     tags:
-      - "*"
+      - 'v*'
+
+permissions:
+  contents: read
 
 jobs:
-  build_windows:
-    runs-on: windows-latest
-    permissions:
-      contents: write
-    steps:
-      - name: Clone Repo
-        uses: actions/checkout@v1
-
-      - name: Install NodeJS
-        uses: actions/setup-node@v1
-        with:
-          node-version: 18
-
-      - name: Install Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-
-      - name: Install Python Deps
-        run: pip install -r requirements.txt
-
-      - name: Install NodeJS Deps
-        run: npm install
-
-      - name: Build Electron App
-        run: npm run dist
-
-      - name: Create Release
-        id: create_release
-        uses: ncipollo/release-action@v1
-        with:
-          draft: true
-          allowUpdates: true
-          replacesArtifacts: true
-          omitDraftDuringUpdate: true
-          omitNameDuringUpdate: true
-          artifacts: "dist/*-win-installer.exe,dist/*-win-portable.exe"
-
-  build_mac:
+  build:
     strategy:
+      fail-fast: false
       matrix:
-        os: [ macos-15, macos-15-intel ]
+        include:
+          - id: windows-x64
+            os: windows-latest
+            platform: win
+            target: portable
+            arch: x64
+          - id: macos-x64
+            os: macos-15-intel
+            platform: mac
+            target: zip
+            arch: x64
+          - id: macos-arm64
+            os: macos-15
+            platform: mac
+            target: zip
+            arch: arm64
+          - id: raspberry-pi-arm64
+            os: ubuntu-22.04-arm
+            platform: linux
+            target: AppImage
+            arch: arm64
     runs-on: ${{ matrix.os }}
-    permissions:
-      contents: write
+    env:
+      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
     steps:
-      - name: Clone Repo
-        uses: actions/checkout@v1
-
-      - name: Install NodeJS
-        uses: actions/setup-node@v1
-        with:
-          node-version: 18
-
-      - name: Install Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-
-      - name: Install Python Deps
-        run: pip install -r requirements.txt
-
-      - name: Install NodeJS Deps
-        run: npm install
-
-      - name: Build Electron App
-        run: npm run dist
-
-      - name: Create Release
-        id: create_release
-        uses: ncipollo/release-action@v1
-        with:
-          draft: true
-          allowUpdates: true
-          replacesArtifacts: true
-          omitDraftDuringUpdate: true
-          omitNameDuringUpdate: true
-          artifacts: "dist/*-mac-*.dmg"
-
-  build_linux:
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - name: Clone Repo
-        uses: actions/checkout@v1
-
-      - name: Install NodeJS
-        uses: actions/setup-node@v1
-        with:
-          node-version: 18
-
-      - name: Install Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-
-      - name: Install Python Deps
-        run: pip install -r requirements.txt
-
-      - name: Install NodeJS Deps
-        run: npm install
-
-      - name: Build Electron App
-        run: npm run dist
-
-      - name: Create Release
-        id: create_release
-        uses: ncipollo/release-action@v1
-        with:
-          draft: true
-          allowUpdates: true
-          replacesArtifacts: true
-          omitDraftDuringUpdate: true
-          omitNameDuringUpdate: true
-          artifacts: "dist/*-linux.AppImage"
-
-  build_docker:
-    runs-on: ubuntu-latest
-    permissions:
-      packages: write
-      contents: read
-    steps:
-      - name: Clone Repo
+      - name: Check out YARA
         uses: actions/checkout@v4
-
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Log in to the GitHub Container registry
-        uses: docker/login-action@v3
+      - name: Check out LXMF-rs with the MeshChat API
+        uses: actions/checkout@v4
         with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Build and push Docker images
-        uses: docker/build-push-action@v5
+          repository: FreeTAKTeam/LXMF-rs
+          ref: 5ee7d2c11d77f0efdd4876c02416974d037203fa
+          path: lxmf-rs
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
         with:
-          context: .
-          platforms: linux/amd64,linux/arm64
-          push: true
-          tags: |
-            ghcr.io/liamcottle/reticulum-meshchat:latest
-            ghcr.io/liamcottle/reticulum-meshchat:${{ github.ref_name }}
-          labels: |
-            org.opencontainers.image.title=Reticulum MeshChat
-            org.opencontainers.image.description=Docker image for Reticulum MeshChat
-            org.opencontainers.image.url=https://github.com/liamcottle/reticulum-meshchat/pkgs/container/reticulum-meshchat/
+          node-version: '22'
+          cache: npm
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+      - name: Install Linux Rust build dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y pkg-config libdbus-1-dev
+      - name: Build reticulumd
+        working-directory: lxmf-rs
+        run: cargo build --locked --release -p reticulumd --bin reticulumd
+      - name: Stage daemon and its license
+        shell: bash
+        run: |
+          set -euo pipefail
+          suffix=''
+          if [[ "$RUNNER_OS" == 'Windows' ]]; then suffix='.exe'; fi
+          mkdir -p build/rust
+          cp "lxmf-rs/target/release/reticulumd${suffix}" build/rust/
+          cp lxmf-rs/LICENSE build/rust/LICENSE-LXMF-rs
+      - name: Install frontend dependencies
+        run: npm ci
+      - name: Check launcher
+        run: npm run test:launcher
+      - name: Build frontend
+        run: npm run build-frontend
+      - name: Build portable application
+        shell: bash
+        run: npx electron-builder --${{ matrix.platform }} ${{ matrix.target }} --${{ matrix.arch }} --publish=never
+      - name: Confirm daemon and frontend are in the package
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$(find dist -type f -name 'reticulumd*' -print -quit)"
+          test -n "$(find dist -type f -name 'index.html' -path '*/public/*' -print -quit)"
+      - name: Upload portable application
+        uses: actions/upload-artifact@v4
+        with:
+          name: yara-${{ matrix.id }}
+          path: dist/YARA-*
+          if-no-files-found: error
+
+  release:
+    if: github.event_name == 'push'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: yara-*
+          path: release-assets
+          merge-multiple: true
+      - name: Publish proof-of-concept prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          test "$(find release-assets -maxdepth 1 -type f | wc -l)" -eq 4
+          gh release create "$GITHUB_REF_NAME" release-assets/YARA-* \
+            --verify-tag --prerelease --title "YARA $GITHUB_REF_NAME" \
+            --notes-file docs/release-notes.md

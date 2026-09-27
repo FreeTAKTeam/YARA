@@ -2,7 +2,52 @@
     <div class="flex flex-col flex-1 overflow-hidden min-w-full sm:min-w-[500px] dark:bg-zinc-950">
         <div v-if="rustPoc" class="overflow-y-auto p-4 space-y-3 text-gray-900 dark:text-zinc-100">
             <h2 class="text-lg font-semibold">Rust proof of concept interfaces</h2>
-            <p>Interfaces are selected when the Rust backend starts. Edit the launch settings and restart to switch between TCP and the serial RNode.</p>
+            <p>Choose TCP, a serial RNode, or both. Saving restarts YARA so the new interfaces take effect.</p>
+            <form v-if="isElectron && rustSettings" @submit.prevent="saveRustSettings" class="rounded border border-gray-300 dark:border-zinc-700 p-4 space-y-4">
+                <label class="block text-sm font-medium">Mode
+                    <select v-model="rustSettings.mode" class="mt-1 block w-full rounded border border-gray-300 bg-white p-2 text-gray-900 dark:border-zinc-600 dark:bg-zinc-900 dark:text-white">
+                        <option value="tcp">TCP</option>
+                        <option value="rnode">RNode</option>
+                        <option value="bridge">TCP + RNode bridge (transport enabled)</option>
+                    </select>
+                </label>
+                <div v-if="rustSettings.mode !== 'rnode'" class="grid gap-3 sm:grid-cols-2">
+                    <label class="block text-sm font-medium">TCP host
+                        <input v-model.trim="rustSettings.tcp.host" type="text" required class="mt-1 block w-full rounded border border-gray-300 bg-white p-2 text-gray-900 dark:border-zinc-600 dark:bg-zinc-900 dark:text-white" />
+                    </label>
+                    <label class="block text-sm font-medium">TCP port
+                        <input v-model.number="rustSettings.tcp.port" type="number" min="1" max="65535" required class="mt-1 block w-full rounded border border-gray-300 bg-white p-2 text-gray-900 dark:border-zinc-600 dark:bg-zinc-900 dark:text-white" />
+                    </label>
+                </div>
+                <div v-if="rustSettings.mode !== 'tcp'" class="space-y-3">
+                    <label class="block text-sm font-medium">RNode serial port
+                        <input v-model.trim="rustSettings.rnode.port" type="text" placeholder="COM3 or /dev/ttyUSB1" required class="mt-1 block w-full rounded border border-gray-300 bg-white p-2 text-gray-900 dark:border-zinc-600 dark:bg-zinc-900 dark:text-white" />
+                    </label>
+                    <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                        <label class="block text-sm font-medium">Frequency (Hz)
+                            <input v-model.number="rustSettings.rnode.frequency" type="number" min="1" required class="mt-1 block w-full rounded border border-gray-300 bg-white p-2 text-gray-900 dark:border-zinc-600 dark:bg-zinc-900 dark:text-white" />
+                        </label>
+                        <label class="block text-sm font-medium">Bandwidth (Hz)
+                            <input v-model.number="rustSettings.rnode.bandwidth" type="number" min="1" required class="mt-1 block w-full rounded border border-gray-300 bg-white p-2 text-gray-900 dark:border-zinc-600 dark:bg-zinc-900 dark:text-white" />
+                        </label>
+                        <label class="block text-sm font-medium">Spreading factor
+                            <input v-model.number="rustSettings.rnode.spreadingFactor" type="number" min="6" max="12" required class="mt-1 block w-full rounded border border-gray-300 bg-white p-2 text-gray-900 dark:border-zinc-600 dark:bg-zinc-900 dark:text-white" />
+                        </label>
+                        <label class="block text-sm font-medium">Coding rate denominator (4/5 = 5)
+                            <input v-model.number="rustSettings.rnode.codingRate" type="number" min="5" max="8" required class="mt-1 block w-full rounded border border-gray-300 bg-white p-2 text-gray-900 dark:border-zinc-600 dark:bg-zinc-900 dark:text-white" />
+                        </label>
+                        <label class="block text-sm font-medium">Transmit power (dBm)
+                            <input v-model.number="rustSettings.rnode.txPower" type="number" min="0" max="30" required class="mt-1 block w-full rounded border border-gray-300 bg-white p-2 text-gray-900 dark:border-zinc-600 dark:bg-zinc-900 dark:text-white" />
+                        </label>
+                    </div>
+                </div>
+                <p v-if="rustSettingsError" role="alert" class="text-sm text-red-600 dark:text-red-400">{{ rustSettingsError }}</p>
+                <div class="flex flex-wrap items-center gap-3">
+                    <button type="submit" :disabled="rustSaving" class="rounded bg-blue-600 px-3 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50">{{ rustSaving ? 'Saving…' : 'Save and restart' }}</button>
+                    <span class="text-xs text-gray-600 dark:text-zinc-400">{{ rustSettingsPath }}</span>
+                </div>
+            </form>
+            <p v-else-if="!isElectron">In a browser-only session, edit <code>~/.yara/settings.json</code> (or <code>storage/rust-poc/settings.json</code> for a source checkout) and restart the daemon.</p>
             <p v-if="rustInterfaces.length === 0">No active interface is reported by the daemon.</p>
             <div v-for="iface in rustInterfaces" :key="iface.name" class="rounded border border-gray-300 dark:border-zinc-700 p-3">
                 <div class="font-semibold">{{ iface.name }}</div>
@@ -110,6 +155,10 @@ export default {
         return {
             interfaces: {},
             rustInterfaces: [],
+            rustSettings: null,
+            rustSettingsPath: '',
+            rustSettingsError: '',
+            rustSaving: false,
             interfaceStats: {},
             reloadInterval: null,
         };
@@ -121,6 +170,7 @@ export default {
 
         if (this.rustPoc) {
             this.loadRustInterfaces();
+            this.loadRustSettings();
             return;
         }
 
@@ -134,6 +184,27 @@ export default {
 
     },
     methods: {
+        async loadRustSettings() {
+            if (!window.electron?.rustSettings) return;
+            try {
+                const result = await window.electron.rustSettings();
+                this.rustSettings = result.value;
+                this.rustSettingsPath = result.file;
+            } catch (error) {
+                this.rustSettingsError = error.message;
+            }
+        },
+        async saveRustSettings() {
+            this.rustSettingsError = '';
+            this.rustSaving = true;
+            try {
+                await window.electron.saveRustSettings(this.rustSettings);
+                this.relaunch();
+            } catch (error) {
+                this.rustSettingsError = error.message;
+                this.rustSaving = false;
+            }
+        },
         async loadRustInterfaces() {
             try {
                 const response = await window.axios.get('/api/v1/reticulum/interfaces');
@@ -301,6 +372,7 @@ export default {
             if (isRustPoc) {
                 clearInterval(this.reloadInterval);
                 this.loadRustInterfaces();
+                this.loadRustSettings();
             }
         },
     },

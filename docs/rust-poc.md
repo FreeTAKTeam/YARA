@@ -1,5 +1,31 @@
 # Rust backend proof of concept
 
+## Portable test release
+
+The [YARA prerelease](https://github.com/FreeTAKTeam/YARA/releases) bundles
+the Rust daemon and the built web UI as a desktop app. Choose the Windows x64
+portable executable, macOS Intel or Apple Silicon ZIP, or Linux ARM64 AppImage
+for a 64-bit Raspberry Pi OS desktop. These are unsigned proof-of-concept
+builds. Close another local MeshChat/YARA instance using port 9337 before
+starting one.
+
+On first launch, YARA creates `~/.yara/settings.json` (on Windows,
+`%USERPROFILE%\.yara\settings.json`). It starts in TCP mode against
+`rmap.world:4242`. Use the **Interfaces** page to choose TCP, RNode, or bridge,
+enter the serial port and radio values, then click **Save and restart**. Use a
+Windows COM port such as `COM3`, a macOS `/dev/cu.*` path, or the Pi's
+`/dev/ttyUSB*` path. The initial radio values are 915 MHz, 500 kHz, SF 10,
+coding rate 4/5, and 22 dBm; confirm that they match the attached RNode and
+your local radio rules. Bridge mode enables Reticulum transport. The settings
+file can also be edited directly when running without Electron. The daemon
+and UI bind to `127.0.0.1:9337`; remote browser access is not part of this
+release.
+
+The Raspberry Pi AppImage needs a 64-bit desktop installation. On Pi OS, the
+user account also needs access to the RNode serial device. The AppImage may
+need the system's FUSE 2 compatibility library; `--appimage-extract-and-run`
+is an alternative if FUSE is unavailable.
+
 This is a local text-chat trial of the existing MeshChat frontend with the
 `reticulumd` MeshChat API in a sibling
 [FreeTAKTeam/LXMF-rs](https://github.com/FreeTAKTeam/LXMF-rs) checkout. It uses
@@ -84,9 +110,10 @@ unavailable; check that both interfaces show online before testing forwarding.
    the actual failure; an accepted send alone does not prove delivery.
 4. Restart the backend and confirm that the conversation reloads from history.
 
-Record TCP and RNode results separately. The Rust mode hides controls for
-voice calls, NomadNet, outbound audio recording, and interface editing.
-Interfaces are configured in the generated TOML for this trial.
+Record TCP and RNode results separately. Rust mode hides voice calls,
+NomadNet, and outbound audio recording. In the packaged Electron app, the
+Interfaces page edits the local TCP and RNode settings and restarts the daemon;
+the generated TOML is the daemon's runtime configuration.
 
 For messages queued at a propagation node, click **Node** in the header and
 enter that node's 32-character destination hash, then click **Sync Messages**.

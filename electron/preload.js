@@ -5,6 +5,18 @@ ipcRenderer.on('log', (event, message) => console.log(message));
 
 contextBridge.exposeInMainWorld('electron', {
 
+    serverUrl: async function() {
+        return await ipcRenderer.invoke('server-url');
+    },
+
+    rustSettings: async function() {
+        return await ipcRenderer.invoke('rust-settings');
+    },
+
+    saveRustSettings: async function(settings) {
+        return await ipcRenderer.invoke('rust-settings-save', settings);
+    },
+
     // allow fetching app version in electron browser window
     appVersion: async function() {
         return await ipcRenderer.invoke('app-version');

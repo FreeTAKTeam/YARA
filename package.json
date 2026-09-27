@@ -1,16 +1,19 @@
 {
-  "name": "reticulum-meshchat",
-  "version": "2.4.0",
-  "description": "",
+  "name": "yara",
+  "version": "0.1.0-poc.1",
+  "description": "MeshChat-compatible Rust Reticulum proof of concept",
+  "author": "FreeTAKTeam",
   "main": "electron/main.js",
   "scripts": {
     "watch": "npm run build-frontend -- --watch",
     "build-frontend": "vite build",
+    "test:launcher": "node --test electron/rust-poc-launcher.test.js",
     "build-backend": "python setup.py build",
     "build": "npm run build-frontend && npm run build-backend",
     "electron-postinstall": "electron-builder install-app-deps",
     "electron": "npm run electron-postinstall && npm run build && electron .",
     "electron:rust-poc": "npm run build-frontend && MESHCHAT_RUST_POC=1 electron .",
+    "dist:rust": "npm run build-frontend && electron-builder --publish=never",
     "dist": "npm run electron-postinstall && npm run build && electron-builder --publish=never"
   },
   "license": "MIT",
@@ -18,80 +21,48 @@
     "node": ">=18"
   },
   "devDependencies": {
-    "electron": "^30.0.8",
-    "electron-builder": "^24.6.3"
+    "electron": "^44.4.5",
+    "electron-builder": "^26.15.3"
   },
   "build": {
-    "appId": "com.liamcottle.reticulummeshchat",
-    "productName": "Reticulum MeshChat",
-    "asar": false,
+    "appId": "org.freetakteam.yara",
+    "productName": "YARA",
+    "asar": true,
     "files": [
-      "electron/**/*"
+      "electron/**/*",
+      "!electron/*.test.js",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "public",
+        "to": "public"
+      },
+      {
+        "from": "build/rust",
+        "to": "bin"
+      },
+      {
+        "from": "LICENSE",
+        "to": "LICENSE"
+      }
     ],
     "directories": {
       "buildResources": "electron/build"
     },
     "mac": {
-      "target": "dmg",
+      "target": "zip",
       "identity": null,
-      "artifactName": "ReticulumMeshChat-v${version}-${os}-${arch}.${ext}",
-      "extendInfo": {
-        "NSMicrophoneUsageDescription": "Microphone access is only needed for Audio Calls",
-        "com.apple.security.device.audio-input": true
-      },
-      "extraFiles": [
-        {
-          "from": "build/exe",
-          "to": "Resources/app/electron/build/exe",
-          "filter": [
-            "**/*"
-          ]
-        }
-      ]
+      "artifactName": "YARA-${version}-macos-${arch}.${ext}"
     },
     "win": {
-      "artifactName": "ReticulumMeshChat-v${version}-${os}.${ext}",
-      "target": [
-        {
-          "target": "portable"
-        },
-        {
-          "target": "nsis"
-        }
-      ],
-      "extraFiles": [
-        {
-          "from": "build/exe",
-          "to": "Resources/app/electron/build/exe",
-          "filter": [
-            "**/*"
-          ]
-        }
-      ]
+      "artifactName": "YARA-${version}-windows-${arch}.${ext}",
+      "target": "portable"
     },
     "linux": {
-      "artifactName": "ReticulumMeshChat-v${version}-${os}.${ext}",
+      "artifactName": "YARA-${version}-linux-${arch}.${ext}",
       "target": "AppImage",
-      "extraFiles": [
-        {
-          "from": "build/exe",
-          "to": "resources/app/electron/build/exe",
-          "filter": [
-            "**/*"
-          ]
-        }
-      ]
-    },
-    "dmg": {
-      "writeUpdateInfo": false
-    },
-    "portable": {
-      "artifactName": "ReticulumMeshChat-v${version}-${os}-portable.${ext}"
-    },
-    "nsis": {
-      "artifactName": "ReticulumMeshChat-v${version}-${os}-installer.${ext}",
-      "oneClick": false,
-      "allowToChangeInstallationDirectory": true
+      "category": "Network"
     }
   },
   "dependencies": {
