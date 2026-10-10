@@ -1,5 +1,5 @@
-Initial YARA proof-of-concept builds for testing the Rust LXMF-rs daemon with
-the MeshChat-compatible UI.
+YARA proof-of-concept update with the LXMF-rs v0.13.0 Rust daemon
+(`fbc75b86e15550722923b366398f0a4116182894`) and the MeshChat-compatible UI.
 
 Assets:
 

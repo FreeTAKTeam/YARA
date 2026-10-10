@@ -3,8 +3,8 @@
 ## Portable test release
 
 The [YARA prerelease](https://github.com/FreeTAKTeam/YARA/releases) bundles
-the Rust daemon and the built web UI as a desktop app. Choose the Windows x64
-portable executable, macOS Intel or Apple Silicon ZIP, or Linux ARM64 AppImage
+the LXMF-rs v0.13.0 Rust daemon and the built web UI as a desktop app.
+Choose the Windows x64 portable executable, macOS Intel or Apple Silicon ZIP, or Linux ARM64 AppImage
 for a 64-bit Raspberry Pi OS desktop. These are unsigned proof-of-concept
 builds. Close another local MeshChat/YARA instance using port 9337 before
 starting one.
