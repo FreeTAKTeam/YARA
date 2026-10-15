@@ -1,5 +1,7 @@
-YARA proof-of-concept update with the LXMF-rs v0.13.0 Rust daemon
-(`fbc75b86e15550722923b366398f0a4116182894`) and the MeshChat-compatible UI.
+YARA proof-of-concept update with the LXMF-rs v0.14.0 Rust daemon and the
+15 October 2026 development changes (`ad08517c57c7cab11f25a803b4dc4b649b27898a`).
+This is an exact upstream commit, three commits after the v0.14.0 release.
+The MeshChat-compatible UI is included.
 
 Assets:
 
