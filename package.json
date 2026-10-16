@@ -1,6 +1,6 @@
 {
   "name": "yara",
-  "version": "0.1.0-poc.3",
+  "version": "0.1.0-poc.4",
   "description": "MeshChat-compatible Rust Reticulum proof of concept",
   "author": "FreeTAKTeam",
   "main": "electron/main.js",

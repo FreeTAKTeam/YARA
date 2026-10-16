@@ -3,24 +3,25 @@
 ## Portable test release
 
 The [YARA prerelease](https://github.com/FreeTAKTeam/YARA/releases) bundles
-the LXMF-rs v0.14.0 Rust daemon plus the 15 October 2026 development changes
-(`ad08517c57c7cab11f25a803b4dc4b649b27898a`) and the built web UI as a desktop app.
+the [LXMF-rs interface-management test release](https://github.com/FreeTAKTeam/LXMF-rs/releases/tag/reticulumd-test-0.14.0-meshchat.1)
+(`a8e500e88610210582e8dd8869df8b510e1e75fc`) and the built web UI as a desktop app.
 Choose the Windows x64 portable executable, macOS Intel or Apple Silicon ZIP, or Linux ARM64 AppImage
 for a 64-bit Raspberry Pi OS desktop. These are unsigned proof-of-concept
 builds. Close another local MeshChat/YARA instance using port 9337 before
 starting one.
 
-On first launch, YARA creates `~/.yara/settings.json` (on Windows,
-`%USERPROFILE%\.yara\settings.json`). It starts in TCP mode against
-`rmap.world:4242`. Use the **Interfaces** page to choose TCP, RNode, or bridge,
-enter the serial port and radio values, then click **Save and restart**. Use a
+On first launch, YARA creates `~/.yara/managed-config.toml` (on Windows,
+`%USERPROFILE%\.yara\managed-config.toml`). It starts with a TCP interface
+against `rmap.world:4242`. Use **Interfaces** to add, edit, enable, disable,
+delete, import, or export several saved interfaces. Use **Transport mode** on
+that page to enable forwarding between interfaces. Restart YARA after changing
+interfaces or transport; the daemon reads these settings at startup. Use a
 Windows COM port such as `COM3`, a macOS `/dev/cu.*` path, or the Pi's
 `/dev/ttyUSB*` path. The initial radio values are 915 MHz, 500 kHz, SF 10,
 coding rate 4/5, and 22 dBm; confirm that they match the attached RNode and
 your local radio rules. YARA does not set the RNode preamble; configure and
-verify the requested 20-symbol preamble on the RNode separately. Bridge mode
-enables Reticulum transport. The settings
-file can also be edited directly when running without Electron. The daemon
+verify the requested 20-symbol preamble on the RNode separately. The managed
+config can also be edited directly when running without Electron. The daemon
 and UI bind to `127.0.0.1:9337`; remote browser access is not part of this
 release.
 
@@ -45,14 +46,14 @@ if that sibling checkout does not already exist. From this checkout:
 git clone https://github.com/FreeTAKTeam/LXMF-rs.git ../LXMF-rs
 npm ci
 npm run build-frontend
-(cd ../LXMF-rs && cargo build -p reticulumd --bin reticulumd)
+(cd ../LXMF-rs && git checkout reticulumd-test-0.14.0-meshchat.1 && cargo build --locked -p reticulumd --bin reticulumd)
 ./scripts/run-rust-poc.sh tcp
 ```
 
-Open `http://127.0.0.1:9337`. The generated TCP configuration connects to
+Open `http://127.0.0.1:9337`. The initial TCP configuration connects to
 `rmap.world:4242`. Use the UI to announce and exchange text with another LXMF
-peer. The Interfaces page shows the daemon's configured interface. Stop the
-daemon with Ctrl+C before changing the interface.
+peer. The Interfaces page shows saved interfaces and their current status.
+Changes on that page are saved immediately and applied at the next restart.
 
 The launcher uses the saved profile display name at startup for LXMF
 announces. After changing the name in the UI, restart the app before announcing
@@ -81,8 +82,11 @@ RUST_POC_RNODE_TX_POWER="$TX_POWER_DBM" \
 
 Confirm the device path before starting. Use
 `MESHCHAT_RUST_POC_MODE=rnode npm run electron:rust-poc` with the same RNode
-environment variables for Electron. The launcher writes
-`storage/rust-poc/generated-config.toml` on each start. RNode uses strict
+environment variables for Electron. These launch options seed
+`storage/rust-poc/managed-config.toml` only when that file does not exist;
+subsequent changes belong in **Interfaces** or the managed config. Existing
+`generated-config.toml` is copied and migrated on the first launch of this
+version, leaving the old file untouched. RNode-only first launch uses strict
 interface startup so invalid radio settings or an unavailable device fail
 visibly. TCP keeps the UI available while a temporarily unavailable server
 reconnects; check the interface status before treating it as connected.
@@ -97,11 +101,12 @@ coding rate (3,906 bps for these settings) and limits forwarded announces to
 2% of that bitrate. This keeps public TCP announce traffic from occupying a
 large share of the LoRa channel in bridge mode.
 
-To run TCP and RNode together as a Reticulum transport node, use the same
-RNode environment variables with `./scripts/run-rust-poc.sh bridge`, or set
-`MESHCHAT_RUST_POC_MODE=bridge` when launching Electron. Bridge mode connects
-to `rmap.world:4242` and includes `[reticulum] enable_transport = true` in the
-generated configuration. Both interfaces appear in the Interfaces page.
+To run TCP and RNode together as a Reticulum transport node, add and configure
+the RNode in **Interfaces**, then enable **Transport mode** and restart. For a
+fresh installation, the same RNode environment variables with
+`./scripts/run-rust-poc.sh bridge` (or `MESHCHAT_RUST_POC_MODE=bridge` in Electron)
+seed both interfaces and transport at once. The launch mode is used only when
+the managed config does not exist. Both interfaces appear in the Interfaces page.
 Bridge mode allows the TCP client to retry when the public server is temporarily
 unavailable; check that both interfaces show online before testing forwarding.
 
@@ -115,8 +120,8 @@ unavailable; check that both interfaces show online before testing forwarding.
 
 Record TCP and RNode results separately. Rust mode hides voice calls,
 NomadNet, and outbound audio recording. In the packaged Electron app, the
-Interfaces page edits the local TCP and RNode settings and restarts the daemon;
-the generated TOML is the daemon's runtime configuration.
+Interfaces page manages the daemon's saved TOML configuration. Restart YARA
+to apply changes.
 
 For messages queued at a propagation node, click **Node** in the header and
 enter that node's 32-character destination hash, then click **Sync Messages**.

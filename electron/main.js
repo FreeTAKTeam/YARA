@@ -4,7 +4,7 @@ const { spawn } = require('child_process');
 const fs = require('fs');
 const net = require('node:net');
 const path = require('node:path');
-const { prepareLaunch, readSettings, saveSettings } = require('./rust-poc-launcher');
+const { prepareLaunch } = require('./rust-poc-launcher');
 
 // remember main window
 var mainWindow = null;
@@ -17,15 +17,6 @@ const rustPoc = app.isPackaged || process.env.MESHCHAT_RUST_POC === '1';
 const serverUrl = `http://${rustPoc ? (process.env.RUST_POC_BIND || '127.0.0.1:9337') : '127.0.0.1:9337'}`;
 
 ipcMain.handle('server-url', () => serverUrl);
-ipcMain.handle('rust-settings', () => {
-    if(!rustPoc || !rustPlan) throw new Error('Rust settings are not available');
-    return readSettings(rustPlan.stateDir);
-});
-ipcMain.handle('rust-settings-save', (event, value) => {
-    if(!rustPoc || !rustPlan) throw new Error('Rust settings are not available');
-    return saveSettings(rustPlan.settingsFile, value);
-});
-
 function assertPortAvailable(bind) {
     const [host, port] = bind.split(':');
     return new Promise((resolve, reject) => {

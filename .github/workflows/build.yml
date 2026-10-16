@@ -45,7 +45,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: FreeTAKTeam/LXMF-rs
-          ref: ad08517c57c7cab11f25a803b4dc4b649b27898a
+          ref: a8e500e88610210582e8dd8869df8b510e1e75fc
           path: lxmf-rs
       - name: Set up Node.js
         uses: actions/setup-node@v4

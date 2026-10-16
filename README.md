@@ -87,12 +87,12 @@ checkout beside YARA, then run:
 ```bash
 npm ci
 npm run build-frontend
-(cd ../LXMF-rs && cargo build -p reticulumd --bin reticulumd)
+(cd ../LXMF-rs && git checkout reticulumd-test-0.14.0-meshchat.1 && cargo build --locked -p reticulumd --bin reticulumd)
 ./scripts/run-rust-poc.sh tcp
 ```
 
 Open `http://127.0.0.1:9337`. See the [Rust POC guide](docs/rust-poc.md) for
-serial RNode and TCP plus LoRa transport settings. Portable test builds for
+managing several interfaces and enabling LoRa/TCP transport. Portable test builds for
 Windows, macOS, and 64-bit Raspberry Pi are published under
 [YARA releases](https://github.com/FreeTAKTeam/YARA/releases).
 

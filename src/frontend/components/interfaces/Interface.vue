@@ -188,7 +188,8 @@
 
             <!-- status -->
             <div v-if="iface._stats?.status === true" class="text-sm text-green-500">Connected</div>
-            <div v-else class="text-sm text-red-500">Disconnected</div>
+            <div v-else-if="iface._stats?.status === false" class="text-sm text-red-500">Disconnected</div>
+            <div v-else class="text-sm text-gray-500">Status unavailable</div>
 
             <!-- stats -->
             <div>• Bitrate: {{ formatBitsPerSecond(iface._stats?.bitrate ?? 0) }}</div>

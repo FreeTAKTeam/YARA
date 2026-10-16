@@ -1,60 +1,6 @@
 <template>
     <div class="flex flex-col flex-1 overflow-hidden min-w-full sm:min-w-[500px] dark:bg-zinc-950">
-        <div v-if="rustPoc" class="overflow-y-auto p-4 space-y-3 text-gray-900 dark:text-zinc-100">
-            <h2 class="text-lg font-semibold">Rust proof of concept interfaces</h2>
-            <p>Choose TCP, a serial RNode, or both. Saving restarts YARA so the new interfaces take effect.</p>
-            <form v-if="isElectron && rustSettings" @submit.prevent="saveRustSettings" class="rounded border border-gray-300 dark:border-zinc-700 p-4 space-y-4">
-                <label class="block text-sm font-medium">Mode
-                    <select v-model="rustSettings.mode" class="mt-1 block w-full rounded border border-gray-300 bg-white p-2 text-gray-900 dark:border-zinc-600 dark:bg-zinc-900 dark:text-white">
-                        <option value="tcp">TCP</option>
-                        <option value="rnode">RNode</option>
-                        <option value="bridge">TCP + RNode bridge (transport enabled)</option>
-                    </select>
-                </label>
-                <div v-if="rustSettings.mode !== 'rnode'" class="grid gap-3 sm:grid-cols-2">
-                    <label class="block text-sm font-medium">TCP host
-                        <input v-model.trim="rustSettings.tcp.host" type="text" required class="mt-1 block w-full rounded border border-gray-300 bg-white p-2 text-gray-900 dark:border-zinc-600 dark:bg-zinc-900 dark:text-white" />
-                    </label>
-                    <label class="block text-sm font-medium">TCP port
-                        <input v-model.number="rustSettings.tcp.port" type="number" min="1" max="65535" required class="mt-1 block w-full rounded border border-gray-300 bg-white p-2 text-gray-900 dark:border-zinc-600 dark:bg-zinc-900 dark:text-white" />
-                    </label>
-                </div>
-                <div v-if="rustSettings.mode !== 'tcp'" class="space-y-3">
-                    <label class="block text-sm font-medium">RNode serial port
-                        <input v-model.trim="rustSettings.rnode.port" type="text" placeholder="COM3 or /dev/ttyUSB1" required class="mt-1 block w-full rounded border border-gray-300 bg-white p-2 text-gray-900 dark:border-zinc-600 dark:bg-zinc-900 dark:text-white" />
-                    </label>
-                    <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                        <label class="block text-sm font-medium">Frequency (Hz)
-                            <input v-model.number="rustSettings.rnode.frequency" type="number" min="1" required class="mt-1 block w-full rounded border border-gray-300 bg-white p-2 text-gray-900 dark:border-zinc-600 dark:bg-zinc-900 dark:text-white" />
-                        </label>
-                        <label class="block text-sm font-medium">Bandwidth (Hz)
-                            <input v-model.number="rustSettings.rnode.bandwidth" type="number" min="1" required class="mt-1 block w-full rounded border border-gray-300 bg-white p-2 text-gray-900 dark:border-zinc-600 dark:bg-zinc-900 dark:text-white" />
-                        </label>
-                        <label class="block text-sm font-medium">Spreading factor
-                            <input v-model.number="rustSettings.rnode.spreadingFactor" type="number" min="6" max="12" required class="mt-1 block w-full rounded border border-gray-300 bg-white p-2 text-gray-900 dark:border-zinc-600 dark:bg-zinc-900 dark:text-white" />
-                        </label>
-                        <label class="block text-sm font-medium">Coding rate denominator (4/5 = 5)
-                            <input v-model.number="rustSettings.rnode.codingRate" type="number" min="5" max="8" required class="mt-1 block w-full rounded border border-gray-300 bg-white p-2 text-gray-900 dark:border-zinc-600 dark:bg-zinc-900 dark:text-white" />
-                        </label>
-                        <label class="block text-sm font-medium">Transmit power (dBm)
-                            <input v-model.number="rustSettings.rnode.txPower" type="number" min="0" max="30" required class="mt-1 block w-full rounded border border-gray-300 bg-white p-2 text-gray-900 dark:border-zinc-600 dark:bg-zinc-900 dark:text-white" />
-                        </label>
-                    </div>
-                </div>
-                <p v-if="rustSettingsError" role="alert" class="text-sm text-red-600 dark:text-red-400">{{ rustSettingsError }}</p>
-                <div class="flex flex-wrap items-center gap-3">
-                    <button type="submit" :disabled="rustSaving" class="rounded bg-blue-600 px-3 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50">{{ rustSaving ? 'Saving…' : 'Save and restart' }}</button>
-                    <span class="text-xs text-gray-600 dark:text-zinc-400">{{ rustSettingsPath }}</span>
-                </div>
-            </form>
-            <p v-else-if="!isElectron">In a browser-only session, edit <code>~/.yara/settings.json</code> (or <code>storage/rust-poc/settings.json</code> for a source checkout) and restart the daemon.</p>
-            <p v-if="rustInterfaces.length === 0">No active interface is reported by the daemon.</p>
-            <div v-for="iface in rustInterfaces" :key="iface.name" class="rounded border border-gray-300 dark:border-zinc-700 p-3">
-                <div class="font-semibold">{{ iface.name }}</div>
-                <div class="text-sm">{{ iface.type }} · {{ iface.enabled ? 'Enabled' : 'Disabled' }}<span v-if="iface.connection"> · {{ iface.connection }}</span></div>
-            </div>
-        </div>
-        <div v-else class="overflow-y-auto p-2 space-y-2">
+        <div class="overflow-y-auto p-2 space-y-2">
 
             <!-- warning - keeping orange-500 for warning visibility in both modes -->
             <div class="flex bg-orange-500 p-2 text-sm font-semibold leading-6 text-white rounded shadow">
@@ -63,7 +9,7 @@
                         <path stroke-linecap="round" stroke-linejoin="round" d="m11.25 11.25.041-.02a.75.75 0 0 1 1.063.852l-.708 2.836a.75.75 0 0 0 1.063.853l.041-.021M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9-3.75h.008v.008H12V8.25Z" />
                     </svg>
                 </div>
-                <div class="ml-2 my-auto">Reticulum MeshChat must be restarted for any interface changes to take effect.</div>
+                <div class="ml-2 my-auto">{{ rustPoc ? 'Restart YARA to apply saved interface and transport changes.' : 'Reticulum MeshChat must be restarted for any interface changes to take effect.' }}</div>
                 <button v-if="isElectron" 
                     @click="relaunch" 
                     type="button" 
@@ -71,6 +17,18 @@
                     <span>Restart Now</span>
                 </button>
             </div>
+
+            <div v-if="rustPoc" class="rounded bg-white p-3 text-sm text-gray-900 shadow dark:bg-zinc-800 dark:text-zinc-100">
+                <div class="font-semibold">Transport mode</div>
+                <p>Choose whether this device forwards traffic between its interfaces after the next restart.</p>
+                <div class="mt-2 flex gap-2">
+                    <button type="button" @click="setRustTransport(true)" class="rounded bg-blue-600 px-3 py-2 font-semibold text-white">Enable transport</button>
+                    <button type="button" @click="setRustTransport(false)" class="rounded bg-gray-600 px-3 py-2 font-semibold text-white">Disable transport</button>
+                </div>
+                <p v-if="rustTransportMessage" :role="rustTransportError ? 'alert' : 'status'" class="mt-2">{{ rustTransportMessage }}</p>
+            </div>
+
+            <p v-if="rustPoc && interfacesError" role="alert" class="text-sm text-red-600 dark:text-red-400">{{ interfacesError }}</p>
 
             <div class="flex space-x-1">
 
@@ -132,7 +90,7 @@
     </div>
 
     <!-- Import Dialog -->
-    <ImportInterfacesModal v-if="!rustPoc" ref="import-interfaces-modal" @dismissed="onImportInterfacesModalDismissed"/>
+    <ImportInterfacesModal ref="import-interfaces-modal" @dismissed="onImportInterfacesModalDismissed"/>
 
 </template>
 
@@ -154,11 +112,9 @@ export default {
     data() {
         return {
             interfaces: {},
-            rustInterfaces: [],
-            rustSettings: null,
-            rustSettingsPath: '',
-            rustSettingsError: '',
-            rustSaving: false,
+            interfacesError: '',
+            rustTransportMessage: '',
+            rustTransportError: false,
             interfaceStats: {},
             reloadInterval: null,
         };
@@ -167,12 +123,6 @@ export default {
         clearInterval(this.reloadInterval);
     },
     mounted() {
-
-        if (this.rustPoc) {
-            this.loadRustInterfaces();
-            this.loadRustSettings();
-            return;
-        }
 
         this.loadInterfaces();
         this.updateInterfaceStats();
@@ -184,33 +134,16 @@ export default {
 
     },
     methods: {
-        async loadRustSettings() {
-            if (!window.electron?.rustSettings) return;
+        async setRustTransport(enabled) {
+            this.rustTransportMessage = '';
             try {
-                const result = await window.electron.rustSettings();
-                this.rustSettings = result.value;
-                this.rustSettingsPath = result.file;
+                const route = enabled ? 'enable-transport' : 'disable-transport';
+                const response = await window.axios.post(`/api/v1/reticulum/${route}`);
+                this.rustTransportError = false;
+                this.rustTransportMessage = response.data.message;
             } catch (error) {
-                this.rustSettingsError = error.message;
-            }
-        },
-        async saveRustSettings() {
-            this.rustSettingsError = '';
-            this.rustSaving = true;
-            try {
-                await window.electron.saveRustSettings(this.rustSettings);
-                this.relaunch();
-            } catch (error) {
-                this.rustSettingsError = error.message;
-                this.rustSaving = false;
-            }
-        },
-        async loadRustInterfaces() {
-            try {
-                const response = await window.axios.get('/api/v1/reticulum/interfaces');
-                this.rustInterfaces = response.data.interfaces ?? [];
-            } catch(e) {
-                this.rustInterfaces = [];
+                this.rustTransportError = true;
+                this.rustTransportMessage = error.response?.data?.message ?? error.message;
             }
         },
         relaunch() {
@@ -223,8 +156,9 @@ export default {
             try {
                 const response = await window.axios.get(`/api/v1/reticulum/interfaces`);
                 this.interfaces = response.data.interfaces;
+                this.interfacesError = '';
             } catch(e) {
-                // do nothing if failed to load interfaces
+                if (this.rustPoc) this.interfacesError = e.response?.data?.message ?? e.message;
             }
         },
         async updateInterfaceStats() {
@@ -236,7 +170,14 @@ export default {
                 // update data
                 const interfaces = response.data.interface_stats?.interfaces ?? [];
                 for(const iface of interfaces){
-                    this.interfaceStats[iface.short_name] = iface;
+                    const name = iface.short_name ?? iface.interface_name ?? iface.name;
+                    const stream = iface.settings?._runtime?.tcp?.stream_status;
+                    this.interfaceStats[name] = {
+                        ...iface,
+                        status: iface.status ?? (stream ? stream.stream_state === 'connected' : null),
+                        txb: iface.txb ?? stream?.bytes_tx,
+                        rxb: iface.rxb ?? stream?.bytes_rx,
+                    };
                 }
 
             } catch(e) {
@@ -365,15 +306,6 @@ export default {
         },
         disabledInterfaces() {
             return this.interfacesWithStats.filter((iface) => !this.isInterfaceEnabled(iface));
-        },
-    },
-    watch: {
-        rustPoc(isRustPoc) {
-            if (isRustPoc) {
-                clearInterval(this.reloadInterval);
-                this.loadRustInterfaces();
-                this.loadRustSettings();
-            }
         },
     },
 }

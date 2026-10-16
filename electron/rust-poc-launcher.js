@@ -65,9 +65,7 @@ function normalizeSettings(input, platform = process.platform) {
 
 function readSettings(stateDir) {
     const file = path.join(stateDir, 'settings.json');
-    if (!fs.existsSync(file)) {
-        fs.writeFileSync(file, `${JSON.stringify(DEFAULT_SETTINGS, null, 2)}\n`, { mode: 0o600, flag: 'wx' });
-    }
+    if (!fs.existsSync(file)) return { file, value: DEFAULT_SETTINGS };
     let saved;
     try {
         saved = JSON.parse(fs.readFileSync(file, 'utf8'));
@@ -126,7 +124,7 @@ function rnodeConfig(settings, env, platform, settingsFile) {
     const codingRate = integer(env.RUST_POC_RNODE_CODING_RATE ?? saved.codingRate, 'RNode coding rate', 5, 8);
     const txPower = integer(env.RUST_POC_RNODE_TX_POWER ?? saved.txPower, 'RNode transmit power', 0, 30);
     const bitrate = Math.floor(spreadingFactor * bandwidth * 4 / ((1 << spreadingFactor) * codingRate));
-    return `{ type = "RNodeInterface", enabled = true, name = "yara-rnode", port = ${JSON.stringify(port)}, frequency = ${frequency}, bandwidth = ${bandwidth}, spreadingfactor = ${spreadingFactor}, codingrate = ${codingRate}, txpower = ${txPower}, bitrate = ${bitrate}, announce_cap = 2, outgoing = true }`;
+    return `[[interfaces]]\ntype = "RNodeInterface"\nenabled = true\nname = "yara-rnode"\nport = ${JSON.stringify(port)}\nfrequency = ${frequency}\nbandwidth = ${bandwidth}\nspreadingfactor = ${spreadingFactor}\ncodingrate = ${codingRate}\ntxpower = ${txPower}\nbitrate = ${bitrate}\nannounce_cap = 2\noutgoing = true`;
 }
 
 function createConfig(settings, mode, stateDir, env, platform, settingsFile) {
@@ -135,14 +133,47 @@ function createConfig(settings, mode, stateDir, env, platform, settingsFile) {
         throw new Error('tcp.host must be a nonempty hostname');
     }
     const port = integer(env.RUST_POC_TCP_PORT ?? settings.tcp.port, 'TCP port', 1, 65535);
-    const tcp = `{ type = "TCPClientInterface", enabled = true, name = "yara-tcp", target_host = ${JSON.stringify(host)}, target_port = ${port} }`;
+    const tcp = `[[interfaces]]\ntype = "TCPClientInterface"\nenabled = true\nname = "yara-tcp"\ntarget_host = ${JSON.stringify(host)}\ntarget_port = ${port}`;
     const interfaces = [];
     if (mode === 'tcp' || mode === 'bridge') interfaces.push(tcp);
     if (mode === 'rnode' || mode === 'bridge') {
         interfaces.push(rnodeConfig(settings, env, platform, settingsFile));
     }
     if (!interfaces.length) throw new Error(`Unsupported mode ${mode}; use tcp, rnode, or bridge`);
-    return `display_name = ${JSON.stringify(displayName(stateDir, env))}\ninterfaces = [\n  ${interfaces.join(',\n  ')}\n]\n${mode === 'bridge' ? '\n[reticulum]\nenable_transport = true\n' : ''}`;
+    return `display_name = ${JSON.stringify(displayName(stateDir, env))}\n\n${interfaces.join('\n\n')}\n${mode === 'bridge' ? '\n[reticulum]\nenable_transport = true\n' : ''}`;
+}
+
+function migrateLegacyConfig(source) {
+    if (!/^interfaces = \[/m.test(source)) return source;
+    const match = /^interfaces = \[\n((?:  \{[^\n]*\},?\n)+)\]/m.exec(source);
+    if (!match) throw new Error('Cannot migrate the old interface config; edit it manually before starting YARA');
+    const blocks = match[1].trimEnd().split('\n').map((line) => {
+        const table = line.trim().replace(/,$/, '');
+        if (!table.startsWith('{ ') || !table.endsWith(' }')) {
+            throw new Error('Cannot migrate the old interface config; edit it manually before starting YARA');
+        }
+        const fields = [];
+        const contents = table.slice(1, -1).trim();
+        let quoted = false;
+        let escaped = false;
+        let start = 0;
+        for (let index = 0; index < contents.length; index++) {
+            const char = contents[index];
+            if (escaped) escaped = false;
+            else if (char === '\\' && quoted) escaped = true;
+            else if (char === '"') quoted = !quoted;
+            else if (char === ',' && !quoted) {
+                fields.push(contents.slice(start, index).trim());
+                start = index + 1;
+            }
+        }
+        fields.push(contents.slice(start).trim());
+        if (quoted || !fields.some((field) => /^name = /.test(field))) {
+            throw new Error('Cannot migrate the old interface config; edit it manually before starting YARA');
+        }
+        return `[[interfaces]]\n${fields.join('\n')}`;
+    });
+    return source.replace(match[0], blocks.join('\n\n'));
 }
 
 function prepareLaunch(options = {}) {
@@ -166,29 +197,50 @@ function prepareLaunch(options = {}) {
     if (!fs.existsSync(binary)) throw new Error(`reticulumd is missing: ${binary}`);
     if (!fs.existsSync(path.join(assets, 'index.html'))) throw new Error(`Build the frontend first: ${assets}`);
     fs.mkdirSync(stateDir, { recursive: true, mode: 0o700 });
-    const { file: settingsFile, value: settings } = readSettings(stateDir);
+    const config = path.join(stateDir, 'managed-config.toml');
+    const legacyConfig = path.join(stateDir, 'generated-config.toml');
+    const firstLaunch = !fs.existsSync(config);
+    const { file: settingsFile, value: settings } = firstLaunch
+        ? readSettings(stateDir)
+        : { file: path.join(stateDir, 'settings.json'), value: DEFAULT_SETTINGS };
     const mode = options.mode || env.MESHCHAT_RUST_POC_MODE || settings.mode;
-    const config = path.join(stateDir, 'generated-config.toml');
-    fs.writeFileSync(config, createConfig(settings, mode, stateDir, env, platform, settingsFile), { mode: 0o600 });
+    if (firstLaunch) {
+        const contents = fs.existsSync(legacyConfig)
+            ? migrateLegacyConfig(fs.readFileSync(legacyConfig, 'utf8'))
+            : createConfig(settings, mode, stateDir, env, platform, settingsFile);
+        fs.writeFileSync(config, contents, { mode: 0o600, flag: 'wx' });
+    }
+    const contents = fs.readFileSync(config, 'utf8');
+    const updated = contents.replace(/^display_name = .*$/m,
+        `display_name = ${JSON.stringify(displayName(stateDir, env))}`);
+    if (updated !== contents) {
+        const temporary = `${config}.${process.pid}.tmp`;
+        try {
+            fs.writeFileSync(temporary, updated, { mode: 0o600, flag: 'wx' });
+            fs.renameSync(temporary, config);
+        } catch (error) {
+            if (fs.existsSync(temporary)) fs.unlinkSync(temporary);
+            throw error;
+        }
+    }
     const args = [
         '--db', path.join(stateDir, 'reticulum.db'),
         '--identity', path.join(stateDir, 'identity'),
         '--config', config,
         ...(platform === 'win32' ? ['--rpc', '127.0.0.1:0'] : ['--rpc-unix', path.join(stateDir, 'rpc.sock')]),
-        ...(mode === 'rnode' ? ['--strict-interface-startup'] : []),
+        ...(firstLaunch && mode === 'rnode' ? ['--strict-interface-startup'] : []),
         '--meshchat-bind', bind,
         '--meshchat-assets', assets,
     ];
-    return { binary, args, bind, config, mode, settingsFile, stateDir };
+    return { binary, args, bind, config, mode: firstLaunch ? mode : 'managed', settingsFile, stateDir };
 }
 
-module.exports = { prepareLaunch, createConfig, readSettings, saveSettings, normalizeSettings, DEFAULT_SETTINGS };
+module.exports = { prepareLaunch, createConfig, readSettings, saveSettings, normalizeSettings, migrateLegacyConfig, DEFAULT_SETTINGS };
 
 if (require.main === module) {
     try {
         const plan = prepareLaunch({ mode: process.argv[2] });
         console.log(`YARA Rust proof of concept: ${plan.mode} on http://${plan.bind}`);
-        console.log(`Settings: ${plan.settingsFile}`);
         console.log(`Config: ${plan.config}`);
         const child = spawn(plan.binary, plan.args, { stdio: 'inherit' });
         process.on('SIGINT', () => child.kill('SIGINT'));
