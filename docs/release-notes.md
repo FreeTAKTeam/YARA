@@ -1,6 +1,6 @@
-YARA v0.1.0-poc.4 bundles the [LXMF-rs interface-management test release](https://github.com/FreeTAKTeam/LXMF-rs/releases/tag/reticulumd-test-0.14.0-meshchat.1) at commit `a8e500e88610210582e8dd8869df8b510e1e75fc` with the MeshChat-compatible UI.
+YARA v0.2.0 bundles [LXMF-rs v0.16.0](https://github.com/FreeTAKTeam/LXMF-rs/releases/tag/v0.16.0) at commit `45b5f5650b375ff418ec849cd9f99bf7f63a106c` with the MeshChat-compatible UI.
 
-The **Interfaces** page can manage several saved interfaces: add, edit, enable, disable, delete, import, and export. It also has a **Transport mode** control for forwarding traffic between interfaces. Changes are saved in `~/.yara/managed-config.toml` (`%USERPROFILE%\.yara\managed-config.toml` on Windows) and take effect after restarting YARA. Existing generated interface settings are migrated once, leaving the old configuration file untouched. A fresh installation starts with TCP to `rmap.world:4242`.
+The **Interfaces** page manages multiple TCP and RNode interfaces and transport mode. Changes persist in `~/.yara/managed-config.toml` (`%USERPROFILE%\.yara\managed-config.toml` on Windows) and take effect after restarting YARA. Existing generated interface settings are migrated once, leaving the old configuration file untouched. A new profile starts with TCP to `rmap.world:4242`. The **About → App Info** page reports the bundled LXMF-rs version, and the Rust UI is titled YARA with attribution to Reticulum MeshChat.
 
 Portable assets:
 
@@ -9,6 +9,6 @@ Portable assets:
 - macOS Apple Silicon: `.zip` containing YARA.app
 - Raspberry Pi OS 64-bit desktop: Linux ARM64 `.AppImage`
 
-The daemon and frontend are bundled. No Python or Node.js installation is needed on the target machine. See the [setup guide](https://github.com/FreeTAKTeam/YARA/blob/main/docs/rust-poc.md).
+The daemon and frontend are bundled. No Python or Node.js installation is needed on the target machine. See the [setup guide](https://github.com/FreeTAKTeam/YARA/blob/v0.2.0/docs/rust-poc.md).
 
-These unsigned builds are for interoperability testing. Windows SmartScreen and macOS Gatekeeper may require an explicit user override. Voice calls and NomadNet are outside this proof of concept. Hardware and cross-platform chat behavior require checks on the corresponding devices.
+These builds are unsigned. Windows SmartScreen and macOS Gatekeeper may require an explicit user override. Voice calls and NomadNet are outside YARA's current scope. LXMF-rs v0.16.0 does not yet establish production resource stability or multi-hour delivery acceptance; see upstream [issues #663](https://github.com/FreeTAKTeam/LXMF-rs/issues/663) and [#678](https://github.com/FreeTAKTeam/LXMF-rs/issues/678). Hardware and cross-platform chat behavior require checks on the corresponding devices.

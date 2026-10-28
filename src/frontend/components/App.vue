@@ -8,10 +8,10 @@
                     <img class="w-12 h-12" src="/assets/images/logo-chat-bubble.png" />
                 </div>
                 <div class="my-auto">
-                    <div @click="onAppNameClick" class="font-bold cursor-pointer text-gray-900 dark:text-zinc-100">Reticulum MeshChat <span v-if="rustPoc" class="text-sm font-normal">(Rust POC)</span></div>
+                    <div @click="onAppNameClick" class="font-bold cursor-pointer text-gray-900 dark:text-zinc-100">{{ rustPoc ? 'YARA' : 'Reticulum MeshChat' }}</div>
                     <div class="text-sm text-gray-700 dark:text-white">
-                        Developed by
-                        <a target="_blank" href="https://liamcottle.com" class="text-blue-500 dark:text-blue-400">Liam Cottle</a>
+                        {{ rustPoc ? 'Forked from' : 'Developed by' }}
+                        <a target="_blank" :href="rustPoc ? 'https://github.com/liamcottle/reticulum-meshchat' : 'https://liamcottle.com'" class="text-blue-500 dark:text-blue-400">{{ rustPoc ? 'Reticulum MeshChat' : 'Liam Cottle' }}</a>
                     </div>
                 </div>
                 <div class="flex my-auto ml-auto mr-0 sm:mr-2 space-x-1 sm:space-x-2">
@@ -393,6 +393,7 @@ export default {
                 const response = await window.axios.get(`/api/v1/app/info`);
                 this.appInfo = response.data.app_info;
                 GlobalState.rustPoc = this.appInfo.backend === "rust-poc";
+                if (GlobalState.rustPoc) document.title = 'YARA';
             } catch(e) {
                 // do nothing if failed to load app info
                 console.log(e);

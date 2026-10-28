@@ -12,12 +12,13 @@
                         <div class="mr-auto">
                             <div>Versions</div>
                             <div class="text-sm text-gray-700 dark:text-zinc-400">
-                                MeshChat v{{ appInfo.version }} • RNS v{{ appInfo.rns_version }} • LXMF v{{ appInfo.lxmf_version }} • Python v{{ appInfo.python_version }}
+                                <template v-if="appInfo.backend === 'rust-poc'">LXMF-rs v{{ appInfo.lxmf_version }}</template>
+                                <template v-else>MeshChat v{{ appInfo.version }} • RNS v{{ appInfo.rns_version }} • LXMF v{{ appInfo.lxmf_version }} • Python v{{ appInfo.python_version }}</template>
                             </div>
                         </div>
                         <div class="hidden sm:block mx-2 my-auto">
                             <a target="_blank" 
-                                href="https://github.com/liamcottle/reticulum-meshchat/releases" 
+                                :href="appInfo.backend === 'rust-poc' ? 'https://github.com/FreeTAKTeam/YARA/releases' : 'https://github.com/liamcottle/reticulum-meshchat/releases'"
                                 type="button" 
                                 class="my-auto inline-flex items-center gap-x-1 rounded-md bg-gray-500 dark:bg-zinc-700 px-2 py-1 text-sm font-semibold text-white shadow-sm hover:bg-gray-400 dark:hover:bg-zinc-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-500 dark:focus-visible:outline-zinc-600">
                                 Check for Updates

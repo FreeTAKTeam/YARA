@@ -73,28 +73,26 @@ If the answer is no, it is probably outside YARA's scope.
 
 The goal is to keep YARA useful as a real application while avoiding the maintenance cost of a second full chat product.
 
-## Current proof of concept
+## Get started
+
+Download a portable build from [YARA releases](https://github.com/FreeTAKTeam/YARA/releases).
+The application includes the Rust daemon and frontend; Python, Node.js, and a
+separate daemon installation are not required. Builds are available for Windows
+x64, macOS Intel and Apple Silicon, and 64-bit Raspberry Pi OS desktop.
+
+Start YARA, open **Interfaces** to check the default TCP connection or add an
+interface, and restart YARA after changing interfaces or transport. In
+**Messages**, use **Announces** to discover a peer or **Compose** to enter an
+LXMF address. See the [usage and build guide](docs/rust-poc.md) for setup,
+messaging, RNode, storage, and source-build instructions.
+
+## Current integration
 
 The first implementation imports the MeshChat source at commit `df5aea9`
 plus the local Rust compatibility changes. Its Python backend and unused
 application features remain in the source snapshot for now; Rust mode hides
 features outside this trial. This import is a starting point for testing the
 daemon API, not a commitment to maintain every upstream feature.
-
-Place a [FreeTAKTeam/LXMF-rs](https://github.com/FreeTAKTeam/LXMF-rs)
-checkout beside YARA, then run:
-
-```bash
-npm ci
-npm run build-frontend
-(cd ../LXMF-rs && git checkout reticulumd-test-0.14.0-meshchat.1 && cargo build --locked -p reticulumd --bin reticulumd)
-./scripts/run-rust-poc.sh tcp
-```
-
-Open `http://127.0.0.1:9337`. See the [Rust POC guide](docs/rust-poc.md) for
-managing several interfaces and enabling LoRa/TCP transport. Portable test builds for
-Windows, macOS, and 64-bit Raspberry Pi are published under
-[YARA releases](https://github.com/FreeTAKTeam/YARA/releases).
 
 ## Related projects
 

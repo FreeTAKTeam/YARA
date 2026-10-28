@@ -1,145 +1,146 @@
-# Rust backend proof of concept
+# Using YARA
 
-## Portable test release
+YARA is a MeshChat-compatible interoperability client for the LXMF-rs daemon.
+The current portable release is **v0.2.0**. It bundles the frontend and
+[LXMF-rs v0.16.0](https://github.com/FreeTAKTeam/LXMF-rs/releases/tag/v0.16.0)
+(commit `45b5f5650b375ff418ec849cd9f99bf7f63a106c`). The daemon and frontend
+communicate locally through the MeshChat-compatible API.
 
-The [YARA prerelease](https://github.com/FreeTAKTeam/YARA/releases) bundles
-the [LXMF-rs interface-management test release](https://github.com/FreeTAKTeam/LXMF-rs/releases/tag/reticulumd-test-0.14.0-meshchat.1)
-(`a8e500e88610210582e8dd8869df8b510e1e75fc`) and the built web UI as a desktop app.
-Choose the Windows x64 portable executable, macOS Intel or Apple Silicon ZIP, or Linux ARM64 AppImage
-for a 64-bit Raspberry Pi OS desktop. These are unsigned proof-of-concept
-builds. Close another local MeshChat/YARA instance using port 9337 before
-starting one.
+## Install and start
 
-On first launch, YARA creates `~/.yara/managed-config.toml` (on Windows,
-`%USERPROFILE%\.yara\managed-config.toml`). It starts with a TCP interface
-against `rmap.world:4242`. Use **Interfaces** to add, edit, enable, disable,
-delete, import, or export several saved interfaces. Use **Transport mode** on
-that page to enable forwarding between interfaces. Restart YARA after changing
-interfaces or transport; the daemon reads these settings at startup. Use a
-Windows COM port such as `COM3`, a macOS `/dev/cu.*` path, or the Pi's
-`/dev/ttyUSB*` path. The initial radio values are 915 MHz, 500 kHz, SF 10,
-coding rate 4/5, and 22 dBm; confirm that they match the attached RNode and
-your local radio rules. YARA does not set the RNode preamble; configure and
-verify the requested 20-symbol preamble on the RNode separately. The managed
-config can also be edited directly when running without Electron. The daemon
-and UI bind to `127.0.0.1:9337`; remote browser access is not part of this
-release.
+1. Download the matching asset from [YARA releases](https://github.com/FreeTAKTeam/YARA/releases):
+   Windows x64 portable `.exe`, macOS Intel or Apple Silicon `.zip`, or Linux
+   ARM64 `.AppImage` for a 64-bit Raspberry Pi OS desktop.
+2. Run the executable, extract and open `YARA.app` on macOS, or make the
+   AppImage executable and open it. These test builds are unsigned; Windows
+   SmartScreen or macOS Gatekeeper may require an explicit user override.
+3. The application starts its bundled daemon and opens the UI. No Python,
+   Node.js, or separate daemon is needed on the target machine.
 
-The Raspberry Pi AppImage needs a 64-bit desktop installation. On Pi OS, the
-user account also needs access to the RNode serial device. The AppImage may
-need the system's FUSE 2 compatibility library; `--appimage-extract-and-run`
-is an alternative if FUSE is unavailable.
+The Raspberry Pi AppImage requires a 64-bit desktop. If FUSE 2 is unavailable,
+run the AppImage with `--appimage-extract-and-run`. YARA uses
+`127.0.0.1:9337` by default; close another local YARA or MeshChat instance
+using that port if startup fails. The service binds to loopback, so it is not
+available to remote browsers.
 
-This is a local text-chat trial of the existing MeshChat frontend with the
-`reticulumd` MeshChat API in a sibling
-[FreeTAKTeam/LXMF-rs](https://github.com/FreeTAKTeam/LXMF-rs) checkout. It uses
-an isolated identity and database in `storage/rust-poc/`, so it does not migrate
-or modify Python MeshChat storage. TCP and RNode use the same identity when
-switched.
+## Connect and send a message
 
-## Build and run TCP
+A new profile starts with a TCP client to `rmap.world:4242`. Open **Interfaces**
+and check its status; the server can be unavailable and a saved interface is
+not proof of a live connection. To use another network, choose **Add Interface**,
+enter its settings, save it, and restart with **Restart Now** or close and reopen
+YARA. You can also edit, enable, disable, delete, import, or export interfaces
+on this page. Interface changes take effect when the daemon restarts.
 
-Place `YARA` and `LXMF-rs` in the same parent directory. Clone `LXMF-rs` only
-if that sibling checkout does not already exist. From this checkout:
+Choose a display name under **My Identity** and save it; the same section shows
+your LXMF address to share with a peer. Restart before announcing a changed
+name, then use **Announce Now** to announce your LXMF
+identity. Under **Messages**, select a peer from **Announces**, or use
+**Compose** and enter its 32-character LXMF destination hash. Send a message
+and check its delivery state: an accepted or queued send does not establish
+that the recipient received it. Announcements and delivery depend on the peer
+and the active network path.
+
+To retrieve messages from a propagation node, choose **Node** in the header,
+enter its 32-character destination hash, and select **Sync Messages**. The node
+selection persists. A display name alone cannot identify a node; automatic sync
+and cancelling an active fetch are outside this trial.
+
+## RNode and transport
+
+Use **Interfaces → Add Interface → RNode Interface** to configure a radio.
+Enter its serial device (for example `COM3`, `/dev/cu.*`, or `/dev/ttyUSB*`)
+and the frequency, bandwidth, spreading factor, coding rate, and transmit
+power for your radio and peers. The account must have access to the serial
+port. Confirm the settings and local radio requirements before transmitting.
+The launcher does not set the RNode preamble; firmware behavior varies.
+
+To forward traffic between interfaces, configure and enable the interfaces,
+select **Enable transport** under **Transport mode** on the Interfaces page,
+then restart YARA. Check that each interface is online before testing
+forwarding. Transport is not needed merely to use one interface for chat.
+
+## Profile and configuration
+
+The packaged app stores its profile in `~/.yara/` (on Windows,
+`%USERPROFILE%\.yara\`). This includes `managed-config.toml`, the identity,
+and the message database. Back up the profile before moving or replacing it;
+the identity determines your address. It is separate from Python MeshChat
+storage, which is not migrated.
+
+The managed config is created once. Later starts preserve saved interface and
+transport changes. If an older `generated-config.toml` exists without a managed
+config, the launcher migrates a copy and leaves the original in place. Startup
+also updates the config's display name from the saved profile (or the
+`RUST_POC_DISPLAY_NAME` override).
+
+## Run from source
+
+The source launcher requires Node.js 18+, npm, Git, Bash, and a Rust toolchain
+and native build dependencies suitable for LXMF-rs. The following uses a
+separate checkout of the daemon revision bundled in the release; it does not
+change an existing `../LXMF-rs` checkout:
 
 ```bash
-git clone https://github.com/FreeTAKTeam/LXMF-rs.git ../LXMF-rs
+git clone --branch v0.16.0 https://github.com/FreeTAKTeam/LXMF-rs.git ../LXMF-rs-yara
+(cd ../LXMF-rs-yara && cargo build --locked -p reticulumd --bin reticulumd)
 npm ci
 npm run build-frontend
-(cd ../LXMF-rs && git checkout reticulumd-test-0.14.0-meshchat.1 && cargo build --locked -p reticulumd --bin reticulumd)
-./scripts/run-rust-poc.sh tcp
+RUST_POC_LXMF_RS_ROOT="$(pwd)/../LXMF-rs-yara" ./scripts/run-rust-poc.sh tcp
 ```
 
-Open `http://127.0.0.1:9337`. The initial TCP configuration connects to
-`rmap.world:4242`. Use the UI to announce and exchange text with another LXMF
-peer. The Interfaces page shows saved interfaces and their current status.
-Changes on that page are saved immediately and applied at the next restart.
+Open `http://127.0.0.1:9337` in a browser; Ctrl+C stops the daemon. To use
+the Electron shell instead, run
+`RUST_POC_LXMF_RS_ROOT="$(pwd)/../LXMF-rs-yara" npm run electron:rust-poc`.
+The launcher normally looks for `../LXMF-rs/target/debug/reticulumd`;
+`RUST_POC_RETICULUMD_BIN` can instead specify an executable directly.
 
-The launcher uses the saved profile display name at startup for LXMF
-announces. After changing the name in the UI, restart the app before announcing
-again. Set `RUST_POC_DISPLAY_NAME` to override the saved name.
+Source launches default to `storage/rust-poc/`, separate from the packaged
+profile. Set `RUST_POC_STATE_DIR` to choose another profile and
+`RUST_POC_BIND=127.0.0.1:PORT` to choose another local port. The `tcp`, `rnode`,
+and `bridge` launch modes only seed a new managed config; switching modes or
+changing seed environment variables does not replace an existing config. Use
+the Interfaces page to change an existing profile. For an initial RNode or
+bridge profile, set `RUST_POC_RNODE_PORT`, `RUST_POC_RNODE_FREQUENCY`,
+`RUST_POC_RNODE_BANDWIDTH`, `RUST_POC_RNODE_SPREADING_FACTOR`,
+`RUST_POC_RNODE_CODING_RATE`, and `RUST_POC_RNODE_TX_POWER` before launching;
+bridge also seeds TCP and enables transport. These settings must match the
+actual device and network. TCP defaults can be changed on first launch with
+`RUST_POC_TCP_HOST` and `RUST_POC_TCP_PORT`.
 
-To run the local Electron shell instead, use `npm run electron:rust-poc` after
-building `reticulumd`. It starts the same launcher in TCP mode. No installer is
-built.
+## Scope and testing
 
-## Switch to serial RNode
+This is an interoperability trial, not full Python MeshChat API parity. Voice
+calls, NomadNet, outbound audio recording, automatic propagation sync, and
+propagation-fetch cancellation are outside the trial. File and image transfer,
+inbound audio, and manual propagation fetch are included, but delivery depends
+on the peer, its limits, and the path. For each interface, check an announce,
+exchange messages in both directions, inspect delivery states, and restart to
+check that history reloads. Do not infer radio or cross-platform delivery from a
+successful build alone.
 
-The connected RNode is at `/dev/ttyUSB1`. The current login must have read and
-write access to that device. Set `DEVICE=/dev/ttyUSB1` and the matching
-`FREQUENCY_HZ`, `BANDWIDTH_HZ`, `SPREADING_FACTOR`, `CODING_RATE`, and
-`TX_POWER_DBM` to the confirmed values, then run:
+## Historical field-trial notes (2026-09-27)
 
-```bash
-RUST_POC_RNODE_PORT="$DEVICE" \
-RUST_POC_RNODE_FREQUENCY="$FREQUENCY_HZ" \
-RUST_POC_RNODE_BANDWIDTH="$BANDWIDTH_HZ" \
-RUST_POC_RNODE_SPREADING_FACTOR="$SPREADING_FACTOR" \
-RUST_POC_RNODE_CODING_RATE="$CODING_RATE" \
-RUST_POC_RNODE_TX_POWER="$TX_POWER_DBM" \
-./scripts/run-rust-poc.sh rnode
-```
+The following observations describe earlier tests, not acceptance of every
+current build, device, or network path.
 
-Confirm the device path before starting. Use
-`MESHCHAT_RUST_POC_MODE=rnode npm run electron:rust-poc` with the same RNode
-environment variables for Electron. These launch options seed
-`storage/rust-poc/managed-config.toml` only when that file does not exist;
-subsequent changes belong in **Interfaces** or the managed config. Existing
-`generated-config.toml` is copied and migrated on the first launch of this
-version, leaving the old file untouched. RNode-only first launch uses strict
-interface startup so invalid radio settings or an unavailable device fail
-visibly. TCP keeps the UI available while a temporarily unavailable server
-reconnects; check the interface status before treating it as connected.
-
-For the current 915 MHz trial, set `DEVICE=/dev/ttyUSB1`,
-`FREQUENCY_HZ=915000000`, `BANDWIDTH_HZ=500000`, `SPREADING_FACTOR=10`,
-`CODING_RATE=5` (4/5), and `TX_POWER_DBM=22`. The RNode reports 18 preamble
-symbols at these settings. Its firmware computes this value; the host does not
-provide an override for the requested 20 symbols.
-The launcher derives the radio bitrate from bandwidth, spreading factor, and
-coding rate (3,906 bps for these settings) and limits forwarded announces to
-2% of that bitrate. This keeps public TCP announce traffic from occupying a
-large share of the LoRa channel in bridge mode.
-
-To run TCP and RNode together as a Reticulum transport node, add and configure
-the RNode in **Interfaces**, then enable **Transport mode** and restart. For a
-fresh installation, the same RNode environment variables with
-`./scripts/run-rust-poc.sh bridge` (or `MESHCHAT_RUST_POC_MODE=bridge` in Electron)
-seed both interfaces and transport at once. The launch mode is used only when
-the managed config does not exist. Both interfaces appear in the Interfaces page.
-Bridge mode allows the TCP client to retry when the public server is temporarily
-unavailable; check that both interfaces show online before testing forwarding.
-
-## Chat check for each interface
-
-1. Confirm the interface is enabled and a peer announce appears in Messages.
-2. Announce this identity and exchange a short text message in both directions.
-3. Check that the outbound message reaches a terminal delivery state, or record
-   the actual failure; an accepted send alone does not prove delivery.
-4. Restart the backend and confirm that the conversation reloads from history.
-
-Record TCP and RNode results separately. Rust mode hides voice calls,
-NomadNet, and outbound audio recording. In the packaged Electron app, the
-Interfaces page manages the daemon's saved TOML configuration. Restart YARA
-to apply changes.
-
-For messages queued at a propagation node, click **Node** in the header and
-enter that node's 32-character destination hash, then click **Sync Messages**.
-This manual fetch uses the POC identity and stores retrieved messages in the
-same conversation history. The node setting persists across restarts. A node's
-display name alone is insufficient to target a fetch. Automatic sync and
-cancelling an active fetch are not included in this trial.
+The RNode trial used `/dev/ttyUSB1`, 915 MHz, 500 kHz bandwidth, spreading
+factor 10, coding rate 4/5, and 22 dBm. Its firmware reported 18 preamble
+symbols; the launcher did not provide the requested 20-symbol override. The
+launcher-derived radio bitrate was 3,906 bps, with forwarded announces capped
+at 2% for that seeded bridge configuration. These are trial values, not
+settings to copy without checking the device and local requirements.
 
 On 2026-09-27, a fetch from Beleth LXMD PN
 (`4cce8a55cc0f232fb0946b392a73fa92`) failed while activating the remote
 link over a seven-hop route. A fetch from the nearer announced node
 `ce76297d9bb990797c159e52b80274b4` succeeded and delivered two previously
-missing images from Columba. That nearer node is selected in the saved POC
+missing images from Columba. That nearer node is selected in the saved trial
 profile; a subsequent manual sync completed with zero new inbox messages.
 
 File attachments are accepted through the existing send-message API and exposed
 in conversation history as downloadable files. The combined message and file
-size is limited to 900 KB for this proof of concept; transport delivery still
+size is limited to 900 KB for this client; transport delivery still
 depends on the recipient's LXMF size limit and the active interface.
 Image fields are also mapped for sending and display. A previously received
 14,741-byte JPEG now renders in the conversation. A synthetic 271,102-byte
@@ -152,7 +153,7 @@ public route test could not be completed without the remote peer.
 
 Incoming LXMF audio field `7` is mapped to the existing player. Sideband's
 Opus-in-Ogg mode `0x10` is available for playback; outgoing audio recording
-is outside this POC.
+is outside this client.
 A small PNG image field also transferred intact between the two local Rust
 identities.
 

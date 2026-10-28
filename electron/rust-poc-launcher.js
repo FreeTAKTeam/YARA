@@ -96,9 +96,9 @@ function displayName(stateDir, env) {
     if (env.RUST_POC_DISPLAY_NAME) return env.RUST_POC_DISPLAY_NAME;
     const file = path.join(stateDir, 'reticulum.meshchat.json');
     try {
-        return JSON.parse(fs.readFileSync(file, 'utf8')).config?.display_name || 'YARA POC';
+        return JSON.parse(fs.readFileSync(file, 'utf8')).config?.display_name || 'YARA';
     } catch {
-        return 'YARA POC';
+        return 'YARA';
     }
 }
 
@@ -240,7 +240,7 @@ module.exports = { prepareLaunch, createConfig, readSettings, saveSettings, norm
 if (require.main === module) {
     try {
         const plan = prepareLaunch({ mode: process.argv[2] });
-        console.log(`YARA Rust proof of concept: ${plan.mode} on http://${plan.bind}`);
+        console.log(`YARA Rust client: ${plan.mode} on http://${plan.bind}`);
         console.log(`Config: ${plan.config}`);
         const child = spawn(plan.binary, plan.args, { stdio: 'inherit' });
         process.on('SIGINT', () => child.kill('SIGINT'));
