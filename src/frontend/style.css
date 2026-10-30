@@ -1,3 +1,90 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* REM "Night ops" surfaces, shared by the YARA views */
+@layer base {
+    body {
+        @apply text-rem-text font-sans;
+        color-scheme: dark;
+        background-color: #020710;
+        background-image:
+            linear-gradient(rgb(34 69 115 / 11%) 1px, transparent 1px),
+            linear-gradient(90deg, rgb(34 69 115 / 11%) 1px, transparent 1px),
+            radial-gradient(circle at 78% -15%, rgb(35 124 255 / 34%), transparent 45%),
+            radial-gradient(circle at -5% 100%, rgb(10 164 255 / 20%), transparent 40%),
+            linear-gradient(170deg, #030914, #091632 44%, #06142f);
+        background-size: 26px 26px, 26px 26px, auto, auto, auto;
+        background-attachment: fixed;
+    }
+}
+
+@layer components {
+    .rem-panel {
+        @apply rounded-2xl border p-[0.9rem];
+        border-color: rgb(74 120 193 / 33%);
+        background: linear-gradient(150deg, rgb(9 25 55 / 90%), rgb(7 16 37 / 92%));
+    }
+    .rem-card {
+        @apply rounded-[14px] border p-[0.78rem];
+        border-color: rgb(74 133 207 / 38%);
+        background: rgb(5 20 44 / 72%);
+    }
+    .rem-card-active {
+        border-color: rgb(73 173 255 / 48%);
+        background: rgb(7 47 84 / 74%);
+        box-shadow: 0 0 18px rgb(33 153 255 / 14%);
+    }
+    .rem-bar {
+        @apply rounded-[15px] border;
+        border-color: rgb(74 137 214 / 28%);
+        background: linear-gradient(135deg, rgb(5 21 43 / 88%), rgb(3 13 33 / 88%));
+        box-shadow: inset 0 1px 0 rgb(147 214 255 / 10%), 0 18px 40px rgb(1 6 19 / 28%);
+        backdrop-filter: blur(16px);
+    }
+    .rem-btn {
+        @apply inline-flex items-center justify-center gap-1.5 min-h-11 px-3 rounded-xl border font-ui font-bold text-[0.85rem] uppercase tracking-[0.07em] text-rem-button cursor-pointer transition;
+        border-color: rgb(74 133 207 / 45%);
+        background: linear-gradient(180deg, rgb(10 35 72 / 88%), rgb(6 24 54 / 92%));
+        box-shadow: inset 0 1px 0 rgb(209 244 255 / 10%), 0 8px 18px rgb(2 14 32 / 18%);
+    }
+    .rem-btn-cta {
+        @apply inline-flex items-center justify-center gap-1.5 min-h-11 px-4 rounded-[11px] font-ui font-bold text-[0.85rem] uppercase tracking-[0.07em] text-rem-on-cta cursor-pointer transition;
+        background: linear-gradient(110deg, #00a8ff, #14f0ff);
+    }
+    .rem-btn:active, .rem-btn-cta:active {
+        color: #042541;
+        background: linear-gradient(180deg, rgb(196 240 255 / 96%), rgb(118 212 255 / 94%));
+        transform: translateY(1px) scale(0.985);
+    }
+    .rem-btn:disabled, .rem-btn-cta:disabled {
+        @apply opacity-[0.55] cursor-not-allowed;
+    }
+    .rem-input {
+        @apply block w-full min-h-11 px-3 rounded-[10px] border text-[0.95rem] text-zinc-200 placeholder:text-rem-label focus:ring-2 focus:ring-rem-accent;
+        border-color: rgb(75 118 185 / 44%);
+        background: rgb(8 22 50 / 82%);
+    }
+    .rem-label {
+        @apply font-ui font-bold text-[0.72rem] uppercase tracking-[0.11em] text-rem-label;
+    }
+    .rem-eyebrow {
+        @apply font-ui font-extrabold text-[0.66rem] uppercase tracking-[0.13em] text-rem-eyebrow;
+    }
+    .rem-heading {
+        @apply font-ui font-bold text-[1.3rem] leading-tight text-rem-strong;
+    }
+    .rem-pill {
+        @apply inline-flex items-center gap-1.5 px-3 py-1 rounded-full font-ui font-semibold text-[0.92rem] uppercase tracking-[0.08em] text-rem-accent;
+        background: rgb(9 61 108 / 68%);
+    }
+    .rem-tab-active {
+        @apply text-[#03192f];
+        background: linear-gradient(180deg, #32baff, #1597ee);
+        box-shadow: inset 0 1px 0 rgb(255 255 255 / 34%), 0 0 18px rgb(50 186 255 / 28%);
+    }
+    :focus-visible {
+        outline: 2px solid rgb(116 218 255 / 72%);
+        outline-offset: 2px;
+    }
+}

@@ -1,6 +1,6 @@
 {
-  "name": "MeshChat",
-  "short_name": "MeshChat",
+  "name": "YARA",
+  "short_name": "YARA",
   "description": "A simple mesh network communications app powered by the Reticulum Network Stack.",
   "scope": "/",
   "start_url": "/",

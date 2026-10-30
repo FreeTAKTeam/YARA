@@ -2,23 +2,6 @@
     <div class="flex flex-col flex-1 overflow-hidden min-w-full sm:min-w-[500px] dark:bg-zinc-950">
         <div class="overflow-y-auto space-y-2 p-2">
 
-            <!-- appearance -->
-            <div class="bg-white dark:bg-zinc-800 rounded shadow">
-                <div class="flex border-b border-gray-300 dark:border-zinc-700 text-gray-700 dark:text-gray-200 p-2 font-semibold">Appearance</div>
-                <div class="divide-y divide-gray-300 dark:divide-zinc-700 text-gray-900 dark:text-gray-100">
-
-                    <div class="p-2">
-                        <div class="flex">
-                            <select v-model="config.theme" @change="onThemeChange" class="bg-gray-50 dark:bg-zinc-700 border border-gray-300 dark:border-zinc-600 text-gray-900 dark:text-gray-100 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 dark:focus:ring-blue-600 dark:focus:border-blue-600 block w-full p-2.5">
-                                <option value="light">Light Theme</option>
-                                <option value="dark">Dark Theme</option>
-                            </select>
-                        </div>
-                    </div>
-
-                </div>
-            </div>
-
             <!-- transport mode -->
             <div class="bg-white dark:bg-zinc-800 rounded shadow">
                 <div class="flex border-b border-gray-300 dark:border-zinc-700 text-gray-700 dark:text-gray-200 p-2 font-semibold">Transport Mode</div>
@@ -31,8 +14,8 @@
                             </div>
                             <label class="ml-2 text-sm font-medium text-gray-900 dark:text-gray-100">Enable Transport Mode</label>
                         </div>
-                        <div class="text-sm text-gray-700 dark:text-gray-300">When enabled, MeshChat will route traffic for other peers, respond to path requests and pass announces over your interfaces.</div>
-                        <div class="text-sm text-gray-700 dark:text-gray-300">Changing this setting requires you to restart MeshChat.</div>
+                        <div class="text-sm text-gray-700 dark:text-gray-300">When enabled, YARA will route traffic for other peers, respond to path requests and pass announces over your interfaces.</div>
+                        <div class="text-sm text-gray-700 dark:text-gray-300">Changing this setting requires you to restart YARA.</div>
                     </div>
 
                 </div>
@@ -125,7 +108,7 @@
                             </div>
                             <label class="ml-2 text-sm font-medium text-gray-900 dark:text-gray-100">Local Propagation Node</label>
                         </div>
-                        <div class="text-sm text-gray-700 dark:text-gray-300">When enabled, MeshChat will run a Propagation Node and announce it with the following address for other clients to use.</div>
+                        <div class="text-sm text-gray-700 dark:text-gray-300">When enabled, YARA will run a Propagation Node and announce it with the following address for other clients to use.</div>
                         <div class="flex">
                             <input disabled v-model="config.lxmf_local_propagation_node_address_hash" type="text" class="bg-gray-200 dark:bg-zinc-800 border border-gray-300 dark:border-zinc-600 text-gray-900 dark:text-gray-100 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 dark:focus:ring-blue-600 dark:focus:border-blue-600 block w-full p-2.5">
                         </div>
@@ -226,11 +209,6 @@ export default {
                 alert("Failed to save config!");
                 console.log(e);
             }
-        },
-        async onThemeChange() {
-            await this.updateConfig({
-                "theme": this.config.theme,
-            });
         },
         async onAutoResendFailedMessagesWhenAnnounceReceivedChange() {
             await this.updateConfig({

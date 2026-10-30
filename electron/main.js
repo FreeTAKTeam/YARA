@@ -21,7 +21,7 @@ function assertPortAvailable(bind) {
     const [host, port] = bind.split(':');
     return new Promise((resolve, reject) => {
         const server = net.createServer();
-        server.once('error', () => reject(new Error(`Port ${bind} is already in use. Close the other MeshChat/YARA instance or set RUST_POC_BIND.`)));
+        server.once('error', () => reject(new Error(`Port ${bind} is already in use. Close the other YARA instance or set RUST_POC_BIND.`)));
         server.listen(Number(port), host, () => server.close(resolve));
     });
 }

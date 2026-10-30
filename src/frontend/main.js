@@ -4,6 +4,8 @@ import { createRouter, createWebHashHistory } from 'vue-router';
 import vClickOutside from "click-outside-vue3";
 import "./style.css";
 import "./fonts/RobotoMonoNerdFont/font.css";
+import "./fonts/ChakraPetch/font.css";
+import "./fonts/Rajdhani/font.css";
 
 import App from './components/App.vue';
 

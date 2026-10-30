@@ -1,5 +1,5 @@
 <template>
-    <div class="flex w-full h-full bg-gray-100 dark:bg-zinc-950" :class="{'dark': config?.theme === 'dark'}">
+    <div class="dark flex w-full h-full text-rem-text">
         <div class="mx-auto my-auto w-full max-w-xl p-4">
 
             <!-- in active call -->

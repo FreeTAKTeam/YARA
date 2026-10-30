@@ -224,7 +224,7 @@ export default {
                 this.dismiss();
 
                 // tell user interfaces were imported
-                DialogUtils.alert("Interfaces imported successfully. MeshChat must be restarted for these changes to take effect.");
+                DialogUtils.alert("Interfaces imported successfully. Restart YARA for these changes to take effect.");
 
             } catch(e) {
                 const message = e.response?.data?.message || "Failed to import interfaces";

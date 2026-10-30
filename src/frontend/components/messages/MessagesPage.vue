@@ -7,7 +7,7 @@
         @conversation-click="onConversationClick"
         @peer-click="onPeerClick"/>
 
-    <div class="flex flex-col flex-1 overflow-hidden min-w-full sm:min-w-[500px] dark:bg-zinc-950">
+    <div class="flex flex-col flex-1 overflow-hidden min-w-full sm:min-w-[500px]">
 
         <!-- messages tab -->
         <ConversationViewer

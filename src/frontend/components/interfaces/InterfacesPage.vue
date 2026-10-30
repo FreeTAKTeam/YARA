@@ -1,41 +1,41 @@
 <template>
-    <div class="flex flex-col flex-1 overflow-hidden min-w-full sm:min-w-[500px] dark:bg-zinc-950">
-        <div class="overflow-y-auto p-2 space-y-2">
+    <div class="flex flex-col flex-1 overflow-hidden min-w-full sm:min-w-[500px]">
+        <div class="overflow-y-auto w-full max-w-[1200px] mx-auto space-y-4">
 
-            <!-- warning - keeping orange-500 for warning visibility in both modes -->
-            <div class="flex bg-orange-500 p-2 text-sm font-semibold leading-6 text-white rounded shadow">
+            <!-- restart warning -->
+            <div role="status" class="flex items-center gap-2 rounded-xl border border-[rgb(255_196_76/55%)] bg-[rgb(58_34_10/76%)] px-[0.9rem] py-2 text-rem-warning">
                 <div class="my-auto">
                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-6">
                         <path stroke-linecap="round" stroke-linejoin="round" d="m11.25 11.25.041-.02a.75.75 0 0 1 1.063.852l-.708 2.836a.75.75 0 0 0 1.063.853l.041-.021M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9-3.75h.008v.008H12V8.25Z" />
                     </svg>
                 </div>
-                <div class="ml-2 my-auto">{{ rustPoc ? 'Restart YARA to apply saved interface and transport changes.' : 'Reticulum MeshChat must be restarted for any interface changes to take effect.' }}</div>
+                <div class="ml-2 my-auto">{{ rustPoc ? 'Restart YARA to apply saved interface and transport changes.' : 'Restart YARA for any interface changes to take effect.' }}</div>
                 <button v-if="isElectron" 
                     @click="relaunch" 
                     type="button" 
-                    class="ml-auto my-auto inline-flex items-center gap-x-1 rounded-md bg-white dark:bg-zinc-800 px-2 py-1 text-sm font-semibold text-black dark:text-zinc-200 shadow-sm hover:bg-gray-50 dark:hover:bg-zinc-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white dark:focus-visible:outline-zinc-700">
+                    class="rem-btn ml-auto">
                     <span>Restart Now</span>
                 </button>
             </div>
 
-            <div v-if="rustPoc" class="rounded bg-white p-3 text-sm text-gray-900 shadow dark:bg-zinc-800 dark:text-zinc-100">
-                <div class="font-semibold">Transport mode</div>
-                <p>Choose whether this device forwards traffic between its interfaces after the next restart.</p>
+            <div v-if="rustPoc" class="rem-panel space-y-2">
+                <div class="rem-eyebrow">Reticulum</div>
+                <div class="rem-heading">Transport mode</div>
+                <p class="text-rem-muted">Choose whether this device forwards traffic between its interfaces after the next restart.</p>
                 <div class="mt-2 flex gap-2">
-                    <button type="button" @click="setRustTransport(true)" class="rounded bg-blue-600 px-3 py-2 font-semibold text-white">Enable transport</button>
-                    <button type="button" @click="setRustTransport(false)" class="rounded bg-gray-600 px-3 py-2 font-semibold text-white">Disable transport</button>
+                    <button type="button" @click="setRustTransport(true)" class="rem-btn">Enable transport</button>
+                    <button type="button" @click="setRustTransport(false)" class="rem-btn">Disable transport</button>
                 </div>
                 <p v-if="rustTransportMessage" :role="rustTransportError ? 'alert' : 'status'" class="mt-2">{{ rustTransportMessage }}</p>
             </div>
 
-            <p v-if="rustPoc && interfacesError" role="alert" class="text-sm text-red-600 dark:text-red-400">{{ interfacesError }}</p>
+            <p v-if="rustPoc && interfacesError" role="alert" class="text-sm text-rem-alert">{{ interfacesError }}</p>
 
-            <div class="flex space-x-1">
+            <div class="flex flex-wrap gap-2">
 
                 <!-- Add Interface button -->
                 <RouterLink :to="{ name: 'interfaces.add' }">
-                    <button type="button" 
-                        class="my-auto inline-flex items-center gap-x-1 rounded-md bg-gray-500 dark:bg-zinc-700 px-2 py-1 text-sm font-semibold text-white shadow-sm hover:bg-gray-400 dark:hover:bg-zinc-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-500 dark:focus-visible:outline-zinc-700">
+                    <button type="button" class="rem-btn-cta">
                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-5">
                             <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
                         </svg>
@@ -45,7 +45,7 @@
 
                 <!-- Import button -->
                 <div class="my-auto">
-                    <button @click="showImportInterfacesModal" type="button" class="inline-flex items-center gap-x-1 rounded-md bg-gray-500 dark:bg-zinc-700 px-2 py-1 text-sm font-semibold text-white shadow-sm hover:bg-gray-400 dark:hover:bg-zinc-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-500 dark:focus-visible:outline-zinc-700">
+                    <button @click="showImportInterfacesModal" type="button" class="rem-btn">
                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-5">
                             <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
                         </svg>
@@ -55,7 +55,7 @@
 
                 <!-- Export button -->
                 <div class="my-auto">
-                    <button @click="exportInterfaces" type="button" class="inline-flex items-center gap-x-1 rounded-md bg-gray-500 dark:bg-zinc-700 px-2 py-1 text-sm font-semibold text-white shadow-sm hover:bg-gray-400 dark:hover:bg-zinc-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-500 dark:focus-visible:outline-zinc-700">
+                    <button @click="exportInterfaces" type="button" class="rem-btn">
                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-5">
                             <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
                         </svg>
@@ -76,7 +76,7 @@
                 @delete="deleteInterface(iface._name)"/>
 
             <!-- disabled interfaces -->
-            <div v-if="disabledInterfaces.length > 0" class="font-semibold dark:text-zinc-200">Disabled Interfaces</div>
+            <div v-if="disabledInterfaces.length > 0" class="rem-eyebrow pt-2">Disabled interfaces</div>
             <Interface
                 v-for="iface of disabledInterfaces"
                 :iface="iface"
@@ -252,7 +252,7 @@ export default {
                 const response = await window.axios.post('/api/v1/reticulum/interfaces/export');
 
                 // download file to browser
-                DownloadUtils.downloadFile("meshchat_interfaces.txt", new Blob([response.data]));
+                DownloadUtils.downloadFile("yara_interfaces.txt", new Blob([response.data]));
 
             } catch(e) {
                 DialogUtils.alert("Failed to export interfaces");
