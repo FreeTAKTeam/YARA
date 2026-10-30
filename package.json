@@ -1,7 +1,7 @@
 {
   "name": "yara",
   "version": "1.0.0-alpha.1",
-  "description": "MeshChat-compatible Rust Reticulum interoperability client",
+  "description": "Superfast, lightweight Reticulum chat client",
   "author": "FreeTAKTeam",
   "main": "electron/main.js",
   "desktopName": "yara.desktop",

@@ -2,9 +2,11 @@
 
 ## Product and source boundaries
 
-YARA is a small MeshChat-compatible reference/interoperability client for the
-Rust Reticulum/LXMF daemon API, not another general-purpose chat product.
-Read README.md and docs/rust-poc.md before changing its scope or launch behavior.
+YARA is a superfast, lightweight Reticulum chat client built on the Rust
+Reticulum/LXMF daemon and its MeshChat-compatible API. Keep it simple (KISS):
+chat first, secondary features behind contextual entry points, no new
+top-level screens without a clear need. Read README.md and docs/rust-poc.md
+before changing its scope or launch behavior.
 
 Read and apply [Frontend engineering principles](FRONTEND_ENGINEERING_PRINCIPLES.md)
 before JavaScript/TypeScript UI design, implementation, refactoring, or review.

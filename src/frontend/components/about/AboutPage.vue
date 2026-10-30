@@ -10,7 +10,7 @@
                 <div class="flex-1 min-w-[16rem] space-y-1">
                     <div class="rem-eyebrow">Yet Another Reticulum Application</div>
                     <h2 class="font-ui font-bold text-[2.4rem] leading-none text-rem-strong">YARA</h2>
-                    <p class="text-rem-muted">Reference client for the Rust Reticulum / LXMF daemon API.</p>
+                    <p class="text-rem-muted">A superfast, lightweight Reticulum chat client.</p>
                 </div>
             </div>
 

@@ -1,77 +1,58 @@
 # YARA
 
-**Yet Another Reticulum Application (MeshChat-RS)**
+**Yet Another Reticulum Application**
 
-YARA is a lightweight MeshChat-compatible reference application for the FreeTAKTeam Rust Reticulum stack.
+YARA is a superfast, lightweight Reticulum chat client.
 
-Its primary purpose is to exercise `reticulum-rs` and `LXMF-rs` through a real application, using the REST and WebSocket interfaces exposed by the Rust daemon. YARA is intended for interoperability testing, API validation, regression testing, and as a practical example for developers building applications on top of the Rust daemon.
+It talks LXMF over Reticulum through the FreeTAKTeam Rust stack (`reticulum-rs` and `LXMF-rs`), which ships inside the app. There is no Python runtime to install, it starts in seconds, and it stays out of your way: conversations, peers, and the few network settings you need.
 
-## Project role
+## Principles
 
-YARA is **not intended to compete with or replace Reticulum MeshChat**.
+- **Fast.** A native Rust daemon does the networking; the UI only renders what the daemon reports.
+- **Lightweight.** One small app per platform, a handful of screens, no background services beyond its own daemon.
+- **Simple (KISS).** Chat comes first. Secondary features live behind contextual entry points, never as new top-level screens.
+- **Compatible.** YARA speaks the same LXMF as MeshChat, Sideband, Columba, Pixys, and RatDeck, and keeps MeshChat's REST/WebSocket contract so the same UI can run against a compatible daemon.
 
-The project exists primarily as an interoperability and API reference implementation. Keeping that boundary is deliberate: YARA should remain small enough to maintain as part of the Rust Reticulum work rather than becoming another independent application product.
-
-The target structure is:
+The structure is:
 
 ```text
-MeshChat-compatible UI
+YARA UI
         |
- REST / WebSocket
+ REST / WebSocket (MeshChat-compatible)
         |
- LXMF-rs daemon API
+ LXMF-rs daemon (reticulumd)
         |
    LXMF-rs / RNS
 ```
 
-This separation is useful beyond YARA itself. It demonstrates that Reticulum applications can use a daemon through a documented application API instead of embedding the Reticulum and LXMF implementation directly.
-
-## What YARA should test
-
-YARA should provide repeatable coverage for:
-
-- REST API compatibility.
-- WebSocket events and live message updates.
-- RNS destination discovery and announces.
-- LXMF message send, receive, history, and delivery state.
-- Reconnection and daemon restart behaviour.
-- Interoperability with the Python reference implementation and existing Reticulum applications such as MeshChat, Sideband, Columba, Pixys, and RatDeck where applicable.
-
-The same UI should be usable against different compatible daemon implementations when possible. This makes YARA useful for comparing the Rust implementation with the Python reference without changing the application under test.
+Protocol rules and message state stay in the daemon; the UI never re-implements them.
 
 ## Scope
 
-The initial scope is intentionally narrow:
+YARA covers what a chat client needs:
 
-- basic identity handling;
-- peer/destination discovery;
-- text conversations;
-- message history;
-- message delivery state;
-- REST access;
-- WebSocket event delivery.
+- identity and display name, with announces;
+- peer discovery through announces;
+- text conversations with history and delivery state;
+- attachments and images where the daemon supports them;
+- interfaces, transport and replication-node discovery;
+- propagation node selection and sync.
 
-Features should only be added when they are needed to validate the Rust Reticulum/LXMF implementation or the public daemon API.
-
-In particular, YARA should not automatically inherit every feature implemented by upstream MeshChat. Calls, advanced media features, propagation controls, favourites, or other application-specific features belong here only when they serve an interoperability or API-validation requirement.
+Calls, NomadNet browsing, and other application-heavy features are out of scope. YARA does not automatically inherit every MeshChat feature.
 
 ## Relationship with MeshChat
 
-YARA uses the public behaviour and API contract of [Reticulum MeshChat](https://github.com/liamcottle/reticulum-meshchat) as an important compatibility target.
+YARA is derived from [Reticulum MeshChat](https://github.com/liamcottle/reticulum-meshchat) by Liam Cottle and keeps its public behaviour and API contract as a compatibility target.
 
-Where YARA reuses or derives substantial source code from MeshChat, the original copyright and MIT license notices must be retained as required by the upstream license.
-
-If an implementation is independently written against the documented REST/WebSocket contract, it should still acknowledge MeshChat as the source of the compatible application protocol and user-interface behaviour.
+Where YARA reuses or derives source code from MeshChat, the original copyright and MIT license notices are retained as the upstream license requires, and the app credits MeshChat on its About screen.
 
 ## Maintenance rule
 
 Before adding a feature, ask:
 
-> Does this help test, demonstrate, or validate the Rust Reticulum/LXMF daemon or its public API?
+> Does this make chatting over Reticulum faster or simpler?
 
-If the answer is no, it is probably outside YARA's scope.
-
-The goal is to keep YARA useful as a real application while avoiding the maintenance cost of a second full chat product.
+If the answer is no, leave it out. YARA stays small on purpose.
 
 ## Get started
 
