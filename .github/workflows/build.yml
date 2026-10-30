@@ -45,7 +45,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: FreeTAKTeam/LXMF-rs
-          ref: 45b5f5650b375ff418ec849cd9f99bf7f63a106c
+          ref: 1e0e7ef1d6a4e7a5e5832bee1e139a1e15673f45
           path: lxmf-rs
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -113,6 +113,9 @@ jobs:
           mapfile -t assets < <(find release-assets -maxdepth 1 -type f \
             \( -name '*.exe' -o -name '*.zip' -o -name '*.AppImage' \) | sort)
           test "${#assets[@]}" -eq 4
-          gh release create "$GITHUB_REF_NAME" "${assets[@]}" \
+          # tags with a suffix (v1.0.0-alpha.1) are published as pre-releases
+          prerelease=()
+          [[ "$GITHUB_REF_NAME" == *-* ]] && prerelease=(--prerelease)
+          gh release create "$GITHUB_REF_NAME" "${assets[@]}" "${prerelease[@]}" \
             --verify-tag --title "YARA $GITHUB_REF_NAME" \
             --notes-file docs/release-notes.md

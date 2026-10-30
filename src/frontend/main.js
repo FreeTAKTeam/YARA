@@ -29,9 +29,23 @@ const router = createRouter({
             component: defineAsyncComponent(() => import("./components/about/AboutPage.vue")),
         },
         {
-            name: "interfaces",
-            path: '/interfaces',
-            component: defineAsyncComponent(() => import("./components/interfaces/InterfacesPage.vue")),
+            // settings hub: interfaces and propagation share one screen
+            name: "network-settings",
+            path: '/network',
+            redirect: { name: "interfaces" },
+            component: defineAsyncComponent(() => import("./components/settings/NetworkSettingsPage.vue")),
+            children: [
+                {
+                    name: "interfaces",
+                    path: 'interfaces',
+                    component: defineAsyncComponent(() => import("./components/interfaces/InterfacesPage.vue")),
+                },
+                {
+                    name: "propagation-nodes",
+                    path: 'propagation',
+                    component: defineAsyncComponent(() => import("./components/propagation-nodes/PropagationNodesPage.vue")),
+                },
+            ],
         },
         {
             name: "interfaces.add",
@@ -62,11 +76,6 @@ const router = createRouter({
             path: '/nomadnetwork/:destinationHash?',
             props: true,
             component: defineAsyncComponent(() => import("./components/nomadnetwork/NomadNetworkPage.vue")),
-        },
-        {
-            name: "propagation-nodes",
-            path: '/propagation-nodes',
-            component: defineAsyncComponent(() => import("./components/propagation-nodes/PropagationNodesPage.vue")),
         },
         {
             name: "ping",

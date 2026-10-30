@@ -17,13 +17,24 @@ const rustPoc = app.isPackaged || process.env.MESHCHAT_RUST_POC === '1';
 const serverUrl = `http://${rustPoc ? (process.env.RUST_POC_BIND || '127.0.0.1:9337') : '127.0.0.1:9337'}`;
 
 ipcMain.handle('server-url', () => serverUrl);
-function assertPortAvailable(bind) {
+function isPortAvailable(bind) {
     const [host, port] = bind.split(':');
-    return new Promise((resolve, reject) => {
+    return new Promise((resolve) => {
         const server = net.createServer();
-        server.once('error', () => reject(new Error(`Port ${bind} is already in use. Close the other YARA instance or set RUST_POC_BIND.`)));
-        server.listen(Number(port), host, () => server.close(resolve));
+        server.once('error', () => resolve(false));
+        server.listen(Number(port), host, () => server.close(() => resolve(true)));
     });
+}
+
+// a daemon from a just-closed window needs a few seconds to stop, so wait for it before giving up
+async function assertPortAvailable(bind, waitMs = 10000) {
+    const deadline = Date.now() + waitMs;
+    while(!(await isPortAvailable(bind))){
+        if(Date.now() >= deadline){
+            throw new Error(`Port ${bind} is already in use. Close the other YARA instance or set RUST_POC_BIND.`);
+        }
+        await new Promise((resolve) => setTimeout(resolve, 250));
+    }
 }
 
 // allow fetching app version via ipc
@@ -159,6 +170,17 @@ app.whenReady().then(async () => {
         mainWindow = new BrowserWindow({
             width: 1500,
             height: 800,
+            icon: path.join(__dirname, 'build', 'icon.png'),
+            backgroundColor: '#020710',
+            // no stock menu bar (Alt still shows it, shortcuts keep working); the YARA top bar
+            // doubles as the title bar, with the system window buttons drawn over its right end
+            autoHideMenuBar: true,
+            titleBarStyle: 'hidden',
+            titleBarOverlay: {
+                color: '#00000000',
+                symbolColor: '#8fdbff',
+                height: 86,
+            },
             webPreferences: {
                 // used to inject logging over ipc
                 preload: path.join(__dirname, 'preload.js'),
@@ -270,13 +292,8 @@ app.whenReady().then(async () => {
         });
 
         // quit electron app if exe dies
-        exeChildProcess.on('exit', async function(code) {
+        exeChildProcess.on('exit', async function(code, signal) {
             if(quitting){
-                return;
-            }
-
-            // if no exit code provided, we wanted exit to happen, so do nothing
-            if(code == null){
                 return;
             }
 
@@ -296,7 +313,7 @@ app.whenReady().then(async () => {
                 message: [
                     "YARA backend stopped",
                     "",
-                    `Exit Code: ${code}`,
+                    `Exit: ${code ?? signal}`,
                     "",
                     `----- stdout -----`,
                     "",
@@ -331,3 +348,8 @@ app.on('before-quit', () => {
 app.on('window-all-closed', () => {
     app.quit();
 });
+
+// quit through before-quit when the app is signalled (logout, kill, Ctrl+C), so the daemon is not orphaned
+for(const signal of ['SIGTERM', 'SIGINT', 'SIGHUP']){
+    process.on(signal, () => app.quit());
+}

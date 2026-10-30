@@ -1,10 +1,11 @@
 # Using YARA
 
 YARA is a MeshChat-compatible interoperability client for the LXMF-rs daemon.
-The current portable release is **v0.2.0**. It bundles the frontend and
-[LXMF-rs v0.16.0](https://github.com/FreeTAKTeam/LXMF-rs/releases/tag/v0.16.0)
-(commit `45b5f5650b375ff418ec849cd9f99bf7f63a106c`). The daemon and frontend
-communicate locally through the MeshChat-compatible API.
+The current portable release is **v1.0.0-alpha.1**. It bundles the frontend and
+LXMF-rs at commit `1e0e7ef1d6a4e7a5e5832bee1e139a1e15673f45`
+(v0.16.0 plus the interface-discovery and display-name API from
+[LXMF-rs #713](https://github.com/FreeTAKTeam/LXMF-rs/pull/713)). The daemon and
+frontend communicate locally through the MeshChat-compatible API.
 
 ## Install and start
 
@@ -41,14 +42,15 @@ and check its delivery state: an accepted or queued send does not establish
 that the recipient received it. Announcements and delivery depend on the peer
 and the active network path.
 
-To retrieve messages from a propagation node, choose **Node** in the header,
-enter its 32-character destination hash, and select **Sync Messages**. The node
-selection persists. A display name alone cannot identify a node; automatic sync
-and cancelling an active fetch are outside this trial.
+To retrieve messages from a propagation node, choose **Node** in the header (or
+**Settings → Propagation**), pick one of the announced nodes with **Use** or
+enter its 32-character destination hash, then select **Sync now**. The node
+selection persists. Automatic sync and cancelling an active fetch are outside
+this trial.
 
 ## RNode and transport
 
-Use **Interfaces → Add Interface → RNode Interface** to configure a radio.
+Use **Settings → Interfaces → Add Interface → RNode Interface** to configure a radio.
 Enter its serial device (for example `COM3`, `/dev/cu.*`, or `/dev/ttyUSB*`)
 and the frequency, bandwidth, spreading factor, coding rate, and transmit
 power for your radio and peers. The account must have access to the serial
@@ -56,9 +58,14 @@ port. Confirm the settings and local radio requirements before transmitting.
 The launcher does not set the RNode preamble; firmware behavior varies.
 
 To forward traffic between interfaces, configure and enable the interfaces,
-select **Enable transport** under **Transport mode** on the Interfaces page,
+select **Enable transport** under **Transport** on **Settings → Interfaces**,
 then restart YARA. Check that each interface is online before testing
 forwarding. Transport is not needed merely to use one interface for chat.
+
+To find nodes to connect to, open **Discovered replication nodes** in the same
+section. If discovery is off, select **Enable discovery** and restart; nodes
+appear a few minutes after they announce. **Connect** adds one as a TCP
+interface, which takes effect after a restart.
 
 ## Profile and configuration
 
@@ -82,7 +89,8 @@ separate checkout of the daemon revision bundled in the release; it does not
 change an existing `../LXMF-rs` checkout:
 
 ```bash
-git clone --branch v0.16.0 https://github.com/FreeTAKTeam/LXMF-rs.git ../LXMF-rs-yara
+git clone https://github.com/FreeTAKTeam/LXMF-rs.git ../LXMF-rs-yara
+git -C ../LXMF-rs-yara checkout 1e0e7ef1d6a4e7a5e5832bee1e139a1e15673f45
 (cd ../LXMF-rs-yara && cargo build --locked -p reticulumd --bin reticulumd)
 npm ci
 npm run build-frontend

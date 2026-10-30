@@ -83,6 +83,13 @@
         background: linear-gradient(180deg, #32baff, #1597ee);
         box-shadow: inset 0 1px 0 rgb(255 255 255 / 34%), 0 0 18px rgb(50 186 255 / 28%);
     }
+    /* in the desktop app the masthead is the window's title bar (drag area) */
+    .app-titlebar {
+        -webkit-app-region: drag;
+    }
+    .app-titlebar a, .app-titlebar button, .app-titlebar input, .app-titlebar .cursor-pointer {
+        -webkit-app-region: no-drag;
+    }
     :focus-visible {
         outline: 2px solid rgb(116 218 255 / 72%);
         outline-offset: 2px;

@@ -1,82 +1,86 @@
 <template>
-    <div class="flex flex-col flex-1 overflow-hidden min-w-full sm:min-w-[500px] dark:bg-zinc-950">
+    <div class="flex flex-col flex-1 overflow-hidden min-w-full sm:min-w-[500px]">
+        <div class="overflow-y-auto w-full max-w-[1100px] mx-auto space-y-4">
 
-        <!-- search -->
-        <div v-if="propagationNodes.length > 0" class="flex bg-white dark:bg-zinc-800 p-1 border-b border-gray-300 dark:border-zinc-700">
-            <input v-model="searchTerm" type="text" :placeholder="`Search ${propagationNodes.length} Propagation Nodes...`" class="w-full bg-gray-50 dark:bg-zinc-700 border border-gray-300 dark:border-zinc-600 text-gray-900 dark:text-gray-100 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 dark:focus:ring-blue-600 dark:focus:border-blue-600 block w-full p-2.5">
-        </div>
+            <!-- selected node -->
+            <div class="rem-panel space-y-3">
+                <div>
+                    <div class="rem-eyebrow">LXMF</div>
+                    <div class="rem-heading">Propagation node</div>
+                    <p class="text-rem-muted">Messages for you are stored on this node while you are offline. Sync to collect them.</p>
+                </div>
 
-        <!-- propagation nodes -->
-        <div class="h-full overflow-y-auto">
-            <div v-if="searchedPropagationNodes.length > 0" class="p-2 space-y-2 w-full">
-                <div v-for="propagationNode of searchedPropagationNodes" class="border dark:border-zinc-700 rounded bg-white dark:bg-zinc-800 shadow">
-                    <div class="p-1 flex">
-                        <div class="my-auto">
-                            <div class="font-semibold text-gray-900 dark:text-gray-100">{{ propagationNode.operator_display_name ?? "Unknown Operator" }}</div>
-                            <div class="text-sm text-gray-700 dark:text-gray-300"><{{ propagationNode.destination_hash }}></div>
-                        </div>
-                        <div class="ml-auto my-auto">
-                            <button v-if="config.lxmf_preferred_propagation_node_destination_hash === propagationNode.destination_hash" @click="stopUsingPropagationNode" type="button" class="my-auto inline-flex items-center gap-x-1 rounded-md bg-red-500 dark:bg-red-600 px-2 py-1 text-sm font-semibold text-white shadow-sm hover:bg-red-400 dark:hover:bg-red-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-500 dark:focus-visible:outline-red-600">
-                                Stop Using Node
-                            </button>
-                            <button v-else @click="usePropagationNode(propagationNode.destination_hash)" type="button" class="my-auto inline-flex items-center gap-x-1 rounded-md bg-gray-500 dark:bg-zinc-600 px-2 py-1 text-sm font-semibold text-white shadow-sm hover:bg-gray-400 dark:hover:bg-zinc-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-500 dark:focus-visible:outline-zinc-600">
-                                Set as Preferred
-                            </button>
-                        </div>
+                <div class="rem-card flex flex-wrap items-center gap-3">
+                    <div class="flex-1 min-w-[14rem]">
+                        <template v-if="selectedHash">
+                            <div class="font-ui font-bold text-[1.05rem] text-rem-strong">{{ selectedNode?.operator_display_name ?? 'Unnamed node' }}</div>
+                            <div class="font-mono text-xs text-rem-muted break-all">&lt;{{ selectedHash }}&gt;</div>
+                            <div class="text-[0.82rem] text-rem-muted mt-1">
+                                <span v-if="!selectedNode" class="text-rem-warning">Not heard recently</span>
+                                <span v-else>Heard {{ formatTimeAgo(selectedNode.updated_at) }}</span>
+                                <span v-if="config.lxmf_preferred_propagation_node_last_synced_at"> · Last synced {{ formatTimeAgo(config.lxmf_preferred_propagation_node_last_synced_at) }}</span>
+                                <span v-if="syncState"> · Sync {{ syncState }}</span>
+                            </div>
+                        </template>
+                        <div v-else class="text-rem-muted">No node selected. Pick one from the list below.</div>
                     </div>
-                    <div class="bg-gray-50 dark:bg-zinc-900 p-1">
-                        <div class="text-gray-500 dark:text-gray-400 text-sm">
-                            <span>Announced {{ formatTimeAgo(propagationNode.updated_at) }}</span>
-                            <span v-if="propagationNode.is_propagation_enabled === false">
-                                <span> • <span class="text-red-500 dark:text-red-400">Disabled by Operator</span></span>
-                            </span>
-                            <span v-if="config.lxmf_preferred_propagation_node_destination_hash === propagationNode.destination_hash">
-                                <span> • <span class="text-green-500 dark:text-green-400">Preferred</span></span>
-                            </span>
+                    <button v-if="selectedHash" @click="syncNow" type="button" class="rem-btn-cta">Sync now</button>
+                    <button v-if="selectedHash" @click="useNode(null)" type="button" class="rem-btn">Stop using</button>
+                </div>
+
+                <!-- manual entry -->
+                <form @submit.prevent="useManualNode" class="flex flex-wrap items-end gap-2">
+                    <div class="flex-1 min-w-[16rem]">
+                        <label for="propagation-node-hash" class="rem-label">Or enter a node address</label>
+                        <input id="propagation-node-hash" v-model.trim="manualHash" type="text" placeholder="32-character destination hash" class="rem-input mt-1 font-mono" :aria-invalid="manualError ? 'true' : undefined">
+                    </div>
+                    <button type="submit" class="rem-btn">Use address</button>
+                </form>
+                <p v-if="manualError" role="alert" class="text-sm text-rem-alert">{{ manualError }}</p>
+                <p v-if="saveError" role="alert" class="text-sm text-rem-alert">{{ saveError }}</p>
+            </div>
+
+            <!-- announced nodes -->
+            <div class="rem-panel space-y-3">
+                <div class="flex flex-wrap items-end gap-2">
+                    <div class="flex-1">
+                        <div class="rem-eyebrow">Announced on the network</div>
+                        <div class="rem-heading">Available nodes <span class="text-rem-accent tabular-nums">{{ propagationNodes.length }}</span></div>
+                    </div>
+                    <button @click="loadPropagationNodes" type="button" class="rem-btn">Reload</button>
+                </div>
+
+                <input v-if="propagationNodes.length > 0" v-model="searchTerm" type="search" aria-label="Search propagation nodes" :placeholder="`Search ${propagationNodes.length} nodes by name or address`" class="rem-input">
+
+                <div v-if="searchedPropagationNodes.length > 0" class="grid gap-2 grid-cols-[repeat(auto-fill,minmax(20rem,1fr))]">
+                    <div v-for="node of searchedPropagationNodes" :key="node.destination_hash" class="rem-card flex items-center gap-3" :class="{ 'rem-card-active': node.destination_hash === selectedHash }">
+                        <div class="flex-1 min-w-0">
+                            <div class="font-ui font-bold text-[1.05rem] text-rem-strong truncate">{{ node.operator_display_name ?? 'Unnamed node' }}</div>
+                            <div class="font-mono text-xs text-rem-muted truncate">&lt;{{ node.destination_hash }}&gt;</div>
+                            <div class="text-[0.82rem] text-rem-muted">
+                                Heard {{ formatTimeAgo(node.updated_at) }}
+                                <span v-if="node.is_propagation_enabled === false" class="text-rem-alert"> · Disabled by operator</span>
+                            </div>
                         </div>
+                        <span v-if="node.destination_hash === selectedHash" class="rem-pill !text-[0.75rem] !px-2">In use</span>
+                        <button v-else @click="useNode(node.destination_hash)" :disabled="node.is_propagation_enabled === false" type="button" class="rem-btn">Use</button>
                     </div>
                 </div>
-            </div>
-            <div v-else class="flex h-full">
-                <div class="mx-auto my-auto text-center leading-5 text-gray-900 dark:text-gray-100">
-
-                    <!-- no propagation nodes at all -->
-                    <div v-if="propagationNodes.length === 0" class="flex flex-col">
-                        <div class="mx-auto mb-1">
-                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-6">
-                                <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 13.5h3.86a2.25 2.25 0 0 1 2.012 1.244l.256.512a2.25 2.25 0 0 0 2.013 1.244h3.218a2.25 2.25 0 0 0 2.013-1.244l.256-.512a2.25 2.25 0 0 1 2.013-1.244h3.859m-19.5.338V18a2.25 2.25 0 0 0 2.25 2.25h15A2.25 2.25 0 0 0 21.75 18v-4.162c0-.224-.034-.447-.1-.661L19.24 5.338a2.25 2.25 0 0 0-2.15-1.588H6.911a2.25 2.25 0 0 0-2.15 1.588L2.35 13.177a2.25 2.25 0 0 0-.1.661Z" />
-                            </svg>
-                        </div>
-                        <div class="font-semibold">No Propagation Nodes</div>
-                        <div>Check back later, once someone has announced.</div>
-                        <div class="mt-2">
-                            <button @click="loadPropagationNodes" type="button" class="my-auto inline-flex items-center gap-x-1 rounded-md bg-gray-500 dark:bg-zinc-600 px-2 py-1 text-sm font-semibold text-white shadow-sm hover:bg-gray-400 dark:hover:bg-zinc-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-500 dark:focus-visible:outline-zinc-600">
-                                Reload
-                            </button>
-                        </div>
-                    </div>
-
-                    <!-- is searching, but no results -->
-                    <div v-if="searchTerm !== '' && propagationNodes.length > 0" class="flex flex-col">
-                        <div class="mx-auto mb-1">
-                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6">
-                                <path stroke-linecap="round" stroke-linejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z" />
-                            </svg>
-                        </div>
-                        <div class="font-semibold">No Search Results</div>
-                        <div>Your search didn't match any Propagation Nodes!</div>
-                    </div>
-
+                <div v-else class="text-center text-rem-muted py-6">
+                    <template v-if="propagationNodes.length === 0">No propagation nodes heard yet. They appear here once they announce.</template>
+                    <template v-else>No node matches your search.</template>
                 </div>
             </div>
-        </div>
 
+        </div>
     </div>
 </template>
 
 <script>
 import Utils from "../../js/Utils";
 import WebSocketConnection from "../../js/WebSocketConnection";
+import GlobalState from "../../js/GlobalState";
+import GlobalEmitter from "../../js/GlobalEmitter";
 
 export default {
     name: 'PropagationNodesPage',
@@ -87,31 +91,29 @@ export default {
             config: {
                 lxmf_preferred_propagation_node_destination_hash: null,
             },
+            manualHash: "",
+            manualError: "",
+            saveError: "",
+            syncState: "",
+            reloadInterval: null,
         };
     },
     beforeUnmount() {
-
-        // stop listening for websocket messages
+        clearInterval(this.reloadInterval);
         WebSocketConnection.off("message", this.onWebsocketMessage);
-
     },
     mounted() {
-
-        // listen for websocket messages
         WebSocketConnection.on("message", this.onWebsocketMessage);
-
         this.getConfig();
         this.loadPropagationNodes();
-
+        this.updateSyncState();
+        this.reloadInterval = setInterval(this.updateSyncState, 3000);
     },
     methods: {
         async onWebsocketMessage(message) {
             const json = JSON.parse(message.data);
-            switch(json.type){
-                case 'config': {
-                    this.config = json.config;
-                    break;
-                }
+            if(json.type === 'config'){
+                this.config = json.config;
             }
         },
         async getConfig() {
@@ -124,12 +126,16 @@ export default {
             }
         },
         async updateConfig(config) {
+            this.saveError = "";
             try {
-                const response = await window.axios.patch("/api/v1/config", config);
+                // the rust daemon expects the patch wrapped in "config", the python backend takes it flat
+                const body = GlobalState.rustPoc ? { config } : config;
+                const response = await window.axios.patch("/api/v1/config", body);
                 this.config = response.data.config;
+                return true;
             } catch(e) {
-                alert("Failed to save config!");
-                console.log(e);
+                this.saveError = e.response?.data?.message ?? "Failed to save the propagation node.";
+                return false;
             }
         },
         async loadPropagationNodes() {
@@ -144,28 +150,53 @@ export default {
                 // do nothing if failed to load
             }
         },
-        async usePropagationNode(destination_hash) {
+        async updateSyncState() {
+            try {
+                const response = await window.axios.get("/api/v1/lxmf/propagation-node/status");
+                const state = response.data.propagation_node_status?.state;
+                this.syncState = state && state !== "idle" ? state.replaceAll("_", " ") : "";
+            } catch(e) {
+                // do nothing if failed to load
+            }
+        },
+        async useNode(destinationHash) {
             await this.updateConfig({
-                lxmf_preferred_propagation_node_destination_hash: destination_hash,
+                lxmf_preferred_propagation_node_destination_hash: destinationHash,
             });
         },
-        async stopUsingPropagationNode() {
-            await this.updateConfig({
-                lxmf_preferred_propagation_node_destination_hash: null,
-            });
+        async useManualNode() {
+            // input feedback only; the backend validates the address again
+            if(!/^[0-9a-fA-F]{32}$/.test(this.manualHash)){
+                this.manualError = "Enter the node's 32-character hexadecimal destination hash.";
+                return;
+            }
+            this.manualError = "";
+            if(await this.updateConfig({ lxmf_preferred_propagation_node_destination_hash: this.manualHash.toLowerCase() })){
+                this.manualHash = "";
+            }
+        },
+        syncNow() {
+            // App owns the sync flow (progress, result dialog)
+            GlobalEmitter.emit("sync-propagation-node");
         },
         formatTimeAgo: function(datetimeString) {
             return Utils.formatTimeAgo(datetimeString);
         },
     },
     computed: {
+        selectedHash() {
+            return this.config?.lxmf_preferred_propagation_node_destination_hash;
+        },
+        selectedNode() {
+            return this.propagationNodes.find((node) => node.destination_hash === this.selectedHash);
+        },
         searchedPropagationNodes() {
+            const search = this.searchTerm.toLowerCase();
             return this.propagationNodes.filter((propagationNode) => {
-                const search = this.searchTerm.toLowerCase();
                 const matchesOperatorDisplayName = propagationNode.operator_display_name?.toLowerCase()?.includes(search) ?? false;
                 const matchesDestinationHash = propagationNode.destination_hash.toLowerCase().includes(search);
                 return matchesOperatorDisplayName || matchesDestinationHash;
-            });
+            }).sort((a, b) => Utils.timestampToMillis(b.updated_at) - Utils.timestampToMillis(a.updated_at));
         },
     },
 }

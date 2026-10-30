@@ -9,10 +9,10 @@
                     ? 'rem-tab-active font-bold'
                     : 'text-rem-tab font-semibold hover:text-rem-button'
             ]"
-            class="flex-1 min-w-[4.5rem] h-[54px] px-2 rounded-[13px] flex flex-col items-center justify-center gap-0.5 font-ui text-[0.72rem] whitespace-nowrap"
+            class="w-full min-h-[64px] px-1 py-2 rounded-[13px] flex flex-col items-center justify-center gap-1 font-ui text-[0.72rem] text-center leading-tight"
         >
             <slot name="icon"></slot>
-            <span class="flex gap-1">
+            <span class="flex flex-wrap justify-center gap-x-1">
                 <slot name="text"></slot>
             </span>
         </a>

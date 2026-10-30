@@ -27,7 +27,7 @@
                 <label for="identity-display-name" class="rem-label">Display name</label>
                 <div class="flex gap-2">
                     <input id="identity-display-name" v-model="displayName" type="text" class="rem-input">
-                    <button @click="saveIdentitySettings" type="button" class="rem-btn">Save</button>
+                    <button @click="saveIdentitySettings" :disabled="!displayName?.trim()" type="button" class="rem-btn">Save</button>
                 </div>
                 <template v-if="!rustPoc">
                     <label for="identity-auto-announce" class="rem-label">Auto announce</label>

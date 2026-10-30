@@ -1,9 +1,10 @@
 {
   "name": "yara",
-  "version": "0.2.0",
+  "version": "1.0.0-alpha.1",
   "description": "MeshChat-compatible Rust Reticulum interoperability client",
   "author": "FreeTAKTeam",
   "main": "electron/main.js",
+  "desktopName": "yara.desktop",
   "scripts": {
     "watch": "npm run build-frontend -- --watch",
     "build-frontend": "vite build",
@@ -62,7 +63,14 @@
     "linux": {
       "artifactName": "YARA-${version}-linux-${arch}.${ext}",
       "target": "AppImage",
-      "category": "Network"
+      "category": "Network",
+      "icon": "electron/build/icon.png",
+      "desktop": {
+        "entry": {
+          "Name": "YARA",
+          "StartupWMClass": "yara"
+        }
+      }
     }
   },
   "dependencies": {

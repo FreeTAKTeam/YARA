@@ -18,17 +18,6 @@
                 </button>
             </div>
 
-            <div v-if="rustPoc" class="rem-panel space-y-2">
-                <div class="rem-eyebrow">Reticulum</div>
-                <div class="rem-heading">Transport mode</div>
-                <p class="text-rem-muted">Choose whether this device forwards traffic between its interfaces after the next restart.</p>
-                <div class="mt-2 flex gap-2">
-                    <button type="button" @click="setRustTransport(true)" class="rem-btn">Enable transport</button>
-                    <button type="button" @click="setRustTransport(false)" class="rem-btn">Disable transport</button>
-                </div>
-                <p v-if="rustTransportMessage" :role="rustTransportError ? 'alert' : 'status'" class="mt-2">{{ rustTransportMessage }}</p>
-            </div>
-
             <p v-if="rustPoc && interfacesError" role="alert" class="text-sm text-rem-alert">{{ interfacesError }}</p>
 
             <div class="flex flex-wrap gap-2">
@@ -86,6 +75,9 @@
                 @export="exportInterface(iface._name)"
                 @delete="deleteInterface(iface._name)"/>
 
+            <!-- transport and replication nodes, after the interfaces -->
+            <TransportPanel v-if="rustPoc" :interfaces="interfaces" @interfaces-changed="loadInterfaces"/>
+
         </div>
     </div>
 
@@ -100,6 +92,7 @@ import ElectronUtils from "../../js/ElectronUtils";
 import Interface from "./Interface.vue";
 import Utils from "../../js/Utils";
 import ImportInterfacesModal from "./ImportInterfacesModal.vue";
+import TransportPanel from "./TransportPanel.vue";
 import DownloadUtils from "../../js/DownloadUtils";
 import GlobalState from "../../js/GlobalState";
 
@@ -108,13 +101,12 @@ export default {
     components: {
         ImportInterfacesModal,
         Interface,
+        TransportPanel,
     },
     data() {
         return {
             interfaces: {},
             interfacesError: '',
-            rustTransportMessage: '',
-            rustTransportError: false,
             interfaceStats: {},
             reloadInterval: null,
         };
@@ -134,18 +126,6 @@ export default {
 
     },
     methods: {
-        async setRustTransport(enabled) {
-            this.rustTransportMessage = '';
-            try {
-                const route = enabled ? 'enable-transport' : 'disable-transport';
-                const response = await window.axios.post(`/api/v1/reticulum/${route}`);
-                this.rustTransportError = false;
-                this.rustTransportMessage = response.data.message;
-            } catch (error) {
-                this.rustTransportError = true;
-                this.rustTransportMessage = error.response?.data?.message ?? error.message;
-            }
-        },
         relaunch() {
             ElectronUtils.relaunch();
         },

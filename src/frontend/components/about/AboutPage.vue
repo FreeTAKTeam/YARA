@@ -53,8 +53,8 @@
                         </div>
                     </div>
 
-                    <!-- database path -->
-                    <div class="flex gap-2 p-[0.78rem]">
+                    <!-- database path, only when the backend reports one -->
+                    <div v-if="appInfo.database_path" class="flex gap-2 p-[0.78rem]">
                         <div class="mr-auto">
                             <div class="rem-label">Database Path</div>
                             <div class="font-mono text-[0.85rem] text-rem-muted break-all">{{ appInfo.database_path }}</div>
@@ -69,7 +69,7 @@
                     </div>
 
                     <!-- database file size -->
-                    <div class="p-[0.78rem]">
+                    <div v-if="appInfo.database_path" class="p-[0.78rem]">
                         <div class="rem-label">Database File Size</div>
                         <div class="text-[0.85rem] text-rem-muted">{{ formatBytes(appInfo.database_file_size) }}</div>
                     </div>
