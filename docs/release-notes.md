@@ -1,4 +1,6 @@
-YARA v1.0.0-alpha.1 is the first alpha of the redesigned YARA. It bundles LXMF-rs at commit `1e0e7ef1d6a4e7a5e5832bee1e139a1e15673f45`: [v0.16.0](https://github.com/FreeTAKTeam/LXMF-rs/releases/tag/v0.16.0) plus the interface-discovery and display-name API from [LXMF-rs #713](https://github.com/FreeTAKTeam/LXMF-rs/pull/713), which is not yet merged upstream.
+YARA v1.0.0-alpha.1 is the first alpha of YARA as a superfast, lightweight Reticulum chat client. It is no longer just a proof of concept for the Rust stack: a small app for chatting over Reticulum, with the Rust daemon bundled inside and nothing else to install. It stays MeshChat-compatible and speaks the same LXMF as MeshChat, Sideband and Columba.
+
+It bundles LXMF-rs at commit `1e0e7ef1d6a4e7a5e5832bee1e139a1e15673f45`: [v0.16.0](https://github.com/FreeTAKTeam/LXMF-rs/releases/tag/v0.16.0) plus the interface-discovery and display-name API from [LXMF-rs #713](https://github.com/FreeTAKTeam/LXMF-rs/pull/713), which is not yet merged upstream.
 
 What's new:
 
