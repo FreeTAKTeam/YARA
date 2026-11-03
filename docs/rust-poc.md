@@ -18,6 +18,12 @@ frontend communicate locally through the MeshChat-compatible API.
 3. The application starts its bundled daemon and opens the UI. No Python,
    Node.js, or separate daemon is needed on the target machine.
 
+The release workflow also builds a Debian package for Linux x64 for future
+releases. To install a locally built `.deb` on Debian or Ubuntu, run
+`sudo apt install ./YARA-<version>-linux-<arch>.deb`, then open YARA from the
+applications menu. This package is not included in the published v1.0.0-alpha.1
+release.
+
 The Raspberry Pi AppImage requires a 64-bit desktop. If FUSE 2 is unavailable,
 run the AppImage with `--appimage-extract-and-run`. YARA uses
 `127.0.0.1:9337` by default; close another local YARA or MeshChat instance

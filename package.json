@@ -4,7 +4,7 @@
   "description": "Superfast, lightweight Reticulum chat client",
   "author": "FreeTAKTeam",
   "main": "electron/main.js",
-  "desktopName": "yara.desktop",
+  "desktopName": "yara-reticulum.desktop",
   "scripts": {
     "watch": "npm run build-frontend -- --watch",
     "build-frontend": "vite build",
@@ -60,15 +60,26 @@
       "artifactName": "YARA-${version}-windows-${arch}.${ext}",
       "target": "portable"
     },
+    "deb": {
+      "packageName": "yara-reticulum",
+      "maintainer": "FreeTAKTeam <freeTAkTeam@gmail.com>",
+      "fpm": [
+        "--depends", "libbz2-1.0",
+        "--depends", "libasound2t64 | libasound2",
+        "--depends", "libgbm1",
+        "--depends", "libc6 (>= 2.35)"
+      ]
+    },
     "linux": {
+      "executableName": "yara-reticulum",
       "artifactName": "YARA-${version}-linux-${arch}.${ext}",
       "target": "AppImage",
       "category": "Network",
-      "icon": "electron/build/icon.png",
+      "icon": "src/frontend/public/favicons/favicon-512x512.png",
       "desktop": {
         "entry": {
           "Name": "YARA",
-          "StartupWMClass": "yara"
+          "StartupWMClass": "yara-reticulum"
         }
       }
     }

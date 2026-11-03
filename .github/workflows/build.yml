@@ -1,4 +1,4 @@
-name: YARA portable release
+name: YARA release
 
 on:
   workflow_dispatch:
@@ -30,6 +30,11 @@ jobs:
             platform: mac
             target: zip
             arch: arm64
+          - id: linux-x64
+            os: ubuntu-22.04
+            platform: linux
+            target: deb
+            arch: x64
           - id: raspberry-pi-arm64
             os: ubuntu-22.04-arm
             platform: linux
@@ -77,7 +82,7 @@ jobs:
         run: npm run test:launcher
       - name: Build frontend
         run: npm run build-frontend
-      - name: Build portable application
+      - name: Build application package
         shell: bash
         run: npx electron-builder --${{ matrix.platform }} ${{ matrix.target }} --${{ matrix.arch }} --publish=never
       - name: Confirm daemon and frontend are in the package
@@ -86,7 +91,68 @@ jobs:
           set -euo pipefail
           test -n "$(find dist -type f -name 'reticulumd*' -print -quit)"
           test -n "$(find dist -type f -name 'index.html' -path '*/public/*' -print -quit)"
-      - name: Upload portable application
+      - name: Verify Debian package contents
+        if: matrix.target == 'deb'
+        shell: bash
+        run: |
+          set -euo pipefail
+          package=$(find dist -maxdepth 1 -type f -name '*.deb' -print -quit)
+          test -n "$package"
+          test "$(dpkg-deb --field "$package" Package)" = yara-reticulum
+          test "$(dpkg-deb --field "$package" Architecture)" = amd64
+          dpkg-deb --contents "$package" > "$RUNNER_TEMP/yara-deb-contents"
+          grep -q '/opt/YARA/resources/bin/reticulumd$' "$RUNNER_TEMP/yara-deb-contents"
+          grep -q '/opt/YARA/resources/public/index.html$' "$RUNNER_TEMP/yara-deb-contents"
+          grep -q '/usr/share/applications/yara-reticulum.desktop$' "$RUNNER_TEMP/yara-deb-contents"
+          grep -q '/usr/share/icons/hicolor/512x512/apps/yara-reticulum.png$' "$RUNNER_TEMP/yara-deb-contents"
+          dpkg-deb --control "$package" "$RUNNER_TEMP/yara-deb-control"
+          grep -q '/usr/bin/yara-reticulum' "$RUNNER_TEMP/yara-deb-control/postinst"
+      - name: Test Debian package installation
+        if: matrix.target == 'deb'
+        shell: bash
+        run: |
+          set -euo pipefail
+          package=$(find "$PWD/dist" -maxdepth 1 -type f -name '*.deb' -print -quit)
+          docker run --rm --mount "type=bind,src=$package,dst=/tmp/yara.deb,readonly" ubuntu:22.04 bash -c '
+            set -euo pipefail
+            export DEBIAN_FRONTEND=noninteractive
+            apt-get update -qq
+            apt-get install -y --no-install-recommends yara /tmp/yara.deb
+            for binary in /opt/YARA/yara-reticulum /opt/YARA/resources/bin/reticulumd; do
+              ldd -r "$binary" > /tmp/yara-ldd
+              if grep -E "not found|undefined symbol" /tmp/yara-ldd; then exit 1; fi
+            done
+            /usr/bin/yara --version
+            test -x /usr/bin/yara-reticulum
+            grep -Fx "StartupWMClass=yara-reticulum" /usr/share/applications/yara-reticulum.desktop
+            apt-get install -y --no-install-recommends xvfb xauth curl
+            Xvfb :99 -screen 0 1280x800x24 > /tmp/yara-xvfb.log 2>&1 &
+            xvfb_pid=$!
+            for i in $(seq 1 50); do
+              if [ -S /tmp/.X11-unix/X99 ]; then break; fi
+              sleep 0.1
+            done
+            test -S /tmp/.X11-unix/X99
+            export DISPLAY=:99 RUST_POC_STATE_DIR=/tmp/yara-state RUST_POC_BIND=127.0.0.1:19537
+            export RUST_POC_TCP_HOST=127.0.0.1 RUST_POC_TCP_PORT=9
+            /usr/bin/yara-reticulum --no-sandbox --headless > /tmp/yara.log 2>&1 &
+            app_pid=$!
+            trap "kill $app_pid $xvfb_pid 2>/dev/null || true" EXIT
+            for i in $(seq 1 120); do
+              if curl -fsS http://127.0.0.1:19537/api/v1/config > /dev/null 2>&1; then break; fi
+              if ! kill -0 "$app_pid" 2>/dev/null; then cat /tmp/yara.log; exit 1; fi
+              sleep 0.25
+            done
+            curl -fsS http://127.0.0.1:19537/api/v1/config > /dev/null
+            curl -fsS http://127.0.0.1:19537/ > /dev/null
+            kill "$app_pid"
+            wait "$app_pid" || true
+            kill "$xvfb_pid" || true
+            trap - EXIT
+            apt-get remove -y yara-reticulum
+            /usr/bin/yara --version
+          '
+      - name: Upload application package
         uses: actions/upload-artifact@v4
         with:
           name: yara-${{ matrix.id }}
@@ -111,8 +177,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           mapfile -t assets < <(find release-assets -maxdepth 1 -type f \
-            \( -name '*.exe' -o -name '*.zip' -o -name '*.AppImage' \) | sort)
-          test "${#assets[@]}" -eq 4
+            \( -name '*.exe' -o -name '*.zip' -o -name '*.AppImage' -o -name '*.deb' \) | sort)
+          test "${#assets[@]}" -eq 5
           # tags with a suffix (v1.0.0-alpha.1) are published as pre-releases
           prerelease=()
           [[ "$GITHUB_REF_NAME" == *-* ]] && prerelease=(--prerelease)

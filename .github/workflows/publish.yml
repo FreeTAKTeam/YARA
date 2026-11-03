@@ -38,8 +38,8 @@ jobs:
           TAG: ${{ inputs.tag }}
         run: |
           mapfile -t assets < <(find release-assets -maxdepth 1 -type f \
-            \( -name '*.exe' -o -name '*.zip' -o -name '*.AppImage' \) | sort)
-          test "${#assets[@]}" -eq 4
+            \( -name '*.exe' -o -name '*.zip' -o -name '*.AppImage' -o -name '*.deb' \) | sort)
+          test "${#assets[@]}" -eq 4 || test "${#assets[@]}" -eq 5
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release upload "$TAG" "${assets[@]}" --clobber
             gh release edit "$TAG" --draft=false --prerelease
