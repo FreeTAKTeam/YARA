@@ -8,7 +8,7 @@
   "scripts": {
     "watch": "npm run build-frontend -- --watch",
     "build-frontend": "vite build",
-    "test:launcher": "node --test electron/rust-poc-launcher.test.js",
+    "test:launcher": "node --test electron/rust-poc-launcher.test.js electron/main.test.js",
     "build-backend": "python setup.py build",
     "build": "npm run build-frontend && npm run build-backend",
     "electron-postinstall": "electron-builder install-app-deps",

@@ -172,11 +172,11 @@ app.whenReady().then(async () => {
             height: 800,
             icon: path.join(__dirname, 'build', 'icon.png'),
             backgroundColor: '#020710',
-            // no stock menu bar (Alt still shows it, shortcuts keep working); the YARA top bar
-            // doubles as the title bar, with the system window buttons drawn over its right end
+            // macOS needs its native title bar to keep traffic lights outside the app content.
+            // Elsewhere the YARA top bar hosts the window controls; Alt still shows the menu.
             autoHideMenuBar: true,
-            titleBarStyle: 'hidden',
-            titleBarOverlay: {
+            titleBarStyle: process.platform === 'darwin' ? 'default' : 'hidden',
+            titleBarOverlay: process.platform === 'darwin' ? false : {
                 color: '#00000000',
                 symbolColor: '#8fdbff',
                 height: 86,
