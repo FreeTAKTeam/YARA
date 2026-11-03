@@ -1,23 +1,19 @@
-YARA v1.0.0-alpha.1 is the first alpha of YARA as a superfast, lightweight Reticulum chat client. It is no longer just a proof of concept for the Rust stack: a small app for chatting over Reticulum, with the Rust daemon bundled inside and nothing else to install. It stays MeshChat-compatible and speaks the same LXMF as MeshChat, Sideband and Columba.
+YARA v1.0.0-alpha.2 makes RNode interfaces easier to configure and includes the changes since alpha.1.
 
-It bundles LXMF-rs at commit `1e0e7ef1d6a4e7a5e5832bee1e139a1e15673f45`: [v0.16.0](https://github.com/FreeTAKTeam/LXMF-rs/releases/tag/v0.16.0) plus the interface-discovery and display-name API from [LXMF-rs #713](https://github.com/FreeTAKTeam/LXMF-rs/pull/713), which is not yet merged upstream.
+- **RNode presets.** Select Rural fallback (250 kHz, SF11, 4/5), Urban mesh (250 kHz, SF9, 4/5), Extreme range (125 kHz, SF11, 4/8), or Rural fast (500 kHz, SF10, 4/5). All use 915.000 MHz. The selector is available when adding or editing a radio, including each RNode Multi Interface subinterface. Serial port and transmit power stay unchanged; radio values remain editable, and custom settings are recognized automatically. Advanced users can still edit `managed-config.toml` by hand. Save and restart to apply interface changes.
+- **MeshChat identity import.** First launch can copy an existing MeshChat identity while preserving its LXMF address. Existing YARA identities are never replaced. Messages and attachments are not imported; see the setup guide for custom paths and ambiguous-identity handling.
+- **Linux x64 Debian package.** A `.deb` joins the existing portable assets. Its application command is `yara-reticulum`, so it can coexist with the YARA malware scanner. The release build checks package contents and installation, local daemon/UI startup, and removal on Ubuntu 22.04.
+- **macOS window controls.** The app header leaves room for the native window controls.
 
-What's new:
+The bundled daemon remains LXMF-rs commit `1e0e7ef1d6a4e7a5e5832bee1e139a1e15673f45`, the same revision as alpha.1. This release does not upgrade the daemon.
 
-- **New look and name.** The UI uses the REM "Night ops" design with bundled Rajdhani and Chakra Petch fonts, a new mesh "Y" logo and icons, and a new splash screen. The app is named YARA throughout; About keeps the Reticulum MeshChat credit and MIT notice.
-- **Simpler navigation.** A left rail with Messages, Settings and About. The window title bar and menu bar are replaced by YARA's own top bar (press Alt for the menu).
-- **Settings → Interfaces.** Interfaces first, then Transport with a forwarding status pill and a folded list of discovered replication nodes you can connect to over TCP.
-- **Settings → Propagation.** Pick a propagation node from the announced ones (or enter an address) and sync from the same page; the header **Node** button opens it.
-- **Renames are announced at once.** Changing your display name updates the name the daemon announces, without a restart.
-- **Fixes.** Closing and immediately reopening YARA no longer reports "port in use", and the daemon stops when YARA is closed or signalled. Linux launchers show the YARA icon.
-
-Portable assets:
+Downloads:
 
 - Windows x64: portable `.exe`
-- macOS Intel: `.zip` containing YARA.app
-- macOS Apple Silicon: `.zip` containing YARA.app
+- macOS Intel and Apple Silicon: one `.zip` per architecture, containing YARA.app
+- Linux x64: Debian `.deb`
 - Raspberry Pi OS 64-bit desktop: Linux ARM64 `.AppImage`
 
-The daemon and frontend are bundled. No Python or Node.js installation is needed on the target machine. See the [setup guide](https://github.com/FreeTAKTeam/YARA/blob/v1.0.0-alpha.1/docs/rust-poc.md).
+The daemon and frontend are bundled; no Python, Node.js, or separate daemon installation is required. See the [setup guide](https://github.com/FreeTAKTeam/YARA/blob/v1.0.0-alpha.2/docs/rust-poc.md).
 
-This is an alpha. These builds are unsigned; Windows SmartScreen and macOS Gatekeeper may require an explicit user override. Voice calls and NomadNet are outside YARA's scope. Interface discovery is off by default; transport, discovery and newly connected interfaces take effect after a restart. LXMF-rs does not yet establish production resource stability or multi-hour delivery acceptance; see upstream [issues #663](https://github.com/FreeTAKTeam/LXMF-rs/issues/663) and [#678](https://github.com/FreeTAKTeam/LXMF-rs/issues/678). Hardware and cross-platform chat behavior require checks on the corresponding devices.
+This is an alpha with unsigned builds. Windows SmartScreen and macOS Gatekeeper may require an explicit override. Interface changes require a restart. Preset and launcher regression checks and the frontend build cover configuration behavior; they do not establish physical-radio delivery, range, or cross-platform hardware acceptance. No new physical RNode or sustained-load qualification was performed for this release. Voice calls and NomadNet remain outside YARA's scope.

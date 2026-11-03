@@ -59,8 +59,8 @@ If the answer is no, leave it out. YARA stays small on purpose.
 Download a build from [YARA releases](https://github.com/FreeTAKTeam/YARA/releases).
 The application includes the Rust daemon and frontend; Python, Node.js, and a
 separate daemon installation are not required. Builds are available for Windows
-x64, macOS Intel and Apple Silicon, and 64-bit Raspberry Pi OS desktop.
-The release workflow also builds a Linux x64 Debian package for future releases.
+x64, macOS Intel and Apple Silicon, Linux x64 (Debian package), and 64-bit
+Raspberry Pi OS desktop.
 
 Start YARA, open **Interfaces** to check the default TCP connection or add an
 interface, and restart YARA after changing interfaces or transport. In

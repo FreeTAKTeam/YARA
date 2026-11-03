@@ -1,6 +1,6 @@
 {
   "name": "yara",
-  "version": "1.0.0-alpha.1",
+  "version": "1.0.0-alpha.2",
   "description": "Superfast, lightweight Reticulum chat client",
   "author": "FreeTAKTeam",
   "main": "electron/main.js",
@@ -9,6 +9,7 @@
     "watch": "npm run build-frontend -- --watch",
     "build-frontend": "vite build",
     "test:launcher": "node --test electron/rust-poc-launcher.test.js electron/main.test.js",
+    "test:rnode-presets": "node --test src/frontend/components/interfaces/RNodePresetSelect.test.cjs",
     "build-backend": "python setup.py build",
     "build": "npm run build-frontend && npm run build-backend",
     "electron-postinstall": "electron-builder install-app-deps",

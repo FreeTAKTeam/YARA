@@ -1,7 +1,7 @@
 # Using YARA
 
 YARA is a superfast, lightweight Reticulum chat client built on the LXMF-rs daemon.
-The current portable release is **v1.0.0-alpha.1**. It bundles the frontend and
+The current release is **v1.0.0-alpha.2**. It bundles the frontend and
 LXMF-rs at commit `1e0e7ef1d6a4e7a5e5832bee1e139a1e15673f45`
 (v0.16.0 plus the interface-discovery and display-name API from
 [LXMF-rs #713](https://github.com/FreeTAKTeam/LXMF-rs/pull/713)). The daemon and
@@ -10,19 +10,18 @@ frontend communicate locally through the MeshChat-compatible API.
 ## Install and start
 
 1. Download the matching asset from [YARA releases](https://github.com/FreeTAKTeam/YARA/releases):
-   Windows x64 portable `.exe`, macOS Intel or Apple Silicon `.zip`, or Linux
-   ARM64 `.AppImage` for a 64-bit Raspberry Pi OS desktop.
+   Windows x64 portable `.exe`, macOS Intel or Apple Silicon `.zip`, Linux x64
+   `.deb`, or Linux ARM64 `.AppImage` for a 64-bit Raspberry Pi OS desktop.
 2. Run the executable, extract and open `YARA.app` on macOS, or make the
    AppImage executable and open it. These test builds are unsigned; Windows
    SmartScreen or macOS Gatekeeper may require an explicit user override.
 3. The application starts its bundled daemon and opens the UI. No Python,
    Node.js, or separate daemon is needed on the target machine.
 
-The release workflow also builds a Debian package for Linux x64 for future
-releases. To install a locally built `.deb` on Debian or Ubuntu, run
+To install the Linux x64 Debian package on Debian or Ubuntu, run
 `sudo apt install ./YARA-<version>-linux-<arch>.deb`, then open YARA from the
-applications menu. This package is not included in the published v1.0.0-alpha.1
-release.
+applications menu. The command is `yara-reticulum`; it can coexist with the
+unrelated YARA malware scanner's `yara` command.
 
 The Raspberry Pi AppImage requires a 64-bit desktop. If FUSE 2 is unavailable,
 run the AppImage with `--appimage-extract-and-run`. YARA uses
@@ -57,9 +56,26 @@ this trial.
 ## RNode and transport
 
 Use **Settings → Interfaces → Add Interface → RNode Interface** to configure a radio.
-Enter its serial device (for example `COM3`, `/dev/cu.*`, or `/dev/ttyUSB*`)
-and the frequency, bandwidth, spreading factor, coding rate, and transmit
-power for your radio and peers. The account must have access to the serial
+Choose its serial device (for example `COM3`, `/dev/cu.*`, or `/dev/ttyUSB*`),
+then select a **Radio preset**:
+
+| Profile | Frequency | Bandwidth | Spreading factor | Coding rate |
+| --- | --- | --- | --- | --- |
+| Rural fallback | 915.000 MHz | 250 kHz | SF11 | 4/5 |
+| Urban mesh | 915.000 MHz | 250 kHz | SF9 | 4/5 |
+| Extreme range | 915.000 MHz | 125 kHz | SF11 | 4/8 |
+| Rural fast | 915.000 MHz | 500 kHz | SF10 | 4/5 |
+
+Presets fill only frequency, bandwidth, spreading factor, and coding rate;
+choose the transmit power separately. All radio fields remain editable, and
+the selector shows **Custom / manual settings** when those values do not match
+a preset. Existing settings are preserved until you explicitly select a preset
+or edit a value. Each RNode Multi Interface subinterface has the same selector.
+Save the interface and restart YARA to apply it.
+
+Advanced users can also edit `managed-config.toml` in their profile while YARA
+is closed. Saved interfaces and hand-written configuration survive restarts.
+The account must have access to the serial
 port. Confirm the settings and local radio requirements before transmitting.
 The launcher does not set the RNode preamble; firmware behavior varies.
 
@@ -89,8 +105,7 @@ also updates the config's display name from the saved profile (or the
 
 ## Moving from MeshChat
 
-The source version now imports identities automatically; this behavior is not
-included in the published v1.0.0-alpha.1 binaries.
+YARA imports existing MeshChat identities automatically on first launch.
 
 Before starting YARA for the first time, close MeshChat. If the YARA profile
 does not have an identity yet, the launcher looks for:

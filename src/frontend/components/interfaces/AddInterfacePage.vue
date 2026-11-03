@@ -167,6 +167,8 @@
                         </FormSubLabel>
                     </div>
 
+                    <RNodePresetSelect v-if="newInterfaceType === 'RNodeInterface'" v-model="rnodeRadioSettings"/>
+
                     <!-- interface Frequency -->
                     <div v-if="newInterfaceType === 'RNodeInterface'" class="mb-2">
                         <FormLabel class="mb-1">
@@ -234,7 +236,7 @@
                         <div class="flex-1">
                             <FormLabel class="mb-1">Coding Rate</FormLabel>
                             <select v-model="newInterfaceCodingRate" class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5 dark:bg-zinc-900 dark:border-zinc-600 dark:text-white dark:focus:ring-blue-600 dark:focus:border-blue-600">
-                                <option v-for="codingrate in RNodeInterfaceDefaults.codingrates" :value="codingrate">{{ codingrate }}</option>
+                                <option v-for="codingrate in RNodeInterfaceDefaults.codingrates" :value="codingrate">4/{{ codingrate }}</option>
                             </select>
                         </div>
 
@@ -264,6 +266,8 @@
                                     placeholder="Sub-Interface Name"
                                     class="w-full bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg p-2.5 dark:bg-zinc-900 dark:border-zinc-600 dark:text-white">
 
+                                <RNodePresetSelect v-model="RNodeMultiInterface.subInterfaces[idx]"/>
+
                                 <div class="flex gap-2">
                                     <div class="flex-1">
                                         <FormLabel class="mb-1">Frequency (Hz)</FormLabel>
@@ -290,7 +294,7 @@
                                     <div class="flex-1">
                                         <FormLabel class="mb-1">Coding Rate</FormLabel>
                                         <select v-model.number="sub.codingrate" class="w-full bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg p-2.5 dark:bg-zinc-900 dark:border-zinc-600 dark:text-white">
-                                            <option :key="cr" v-for="cr in RNodeInterfaceDefaults.codingrates" :value="cr">{{ cr }}</option>
+                                            <option :key="cr" v-for="cr in RNodeInterfaceDefaults.codingrates" :value="cr">4/{{ cr }}</option>
                                         </select>
                                     </div>
                                 </div>
@@ -803,10 +807,12 @@ import DialogUtils from "../../js/DialogUtils";
 import ExpandingSection from "./ExpandingSection.vue";
 import FormLabel from "../forms/FormLabel.vue";
 import FormSubLabel from "../forms/FormSubLabel.vue";
+import RNodePresetSelect from "./RNodePresetSelect.vue";
 
 export default {
     name: 'AddInterfacePage',
     components: {
+        RNodePresetSelect,
         FormSubLabel,
         FormLabel,
         ExpandingSection,
@@ -937,6 +943,24 @@ export default {
         };
     },
     computed: {
+        rnodeRadioSettings: {
+            get() {
+                return {
+                    frequency: this.calculateFrequencyInHz(),
+                    bandwidth: this.newInterfaceBandwidth,
+                    spreadingfactor: this.newInterfaceSpreadingFactor,
+                    codingrate: this.newInterfaceCodingRate,
+                };
+            },
+            set(settings) {
+                this.RNodeGHzValue = Math.floor(settings.frequency / 1e9);
+                this.RNodeMHzValue = Math.floor((settings.frequency % 1e9) / 1e6);
+                this.RNodekHzValue = Math.floor((settings.frequency % 1e6) / 1e3);
+                this.newInterfaceBandwidth = settings.bandwidth;
+                this.newInterfaceSpreadingFactor = settings.spreadingfactor;
+                this.newInterfaceCodingRate = settings.codingrate;
+            },
+        },
         formattedFrequency() {
             const totalHz = this.calculateFrequencyInHz();
             if(totalHz >= 1e9){

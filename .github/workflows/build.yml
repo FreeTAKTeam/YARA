@@ -80,6 +80,8 @@ jobs:
         run: npm ci
       - name: Check launcher
         run: npm run test:launcher
+      - name: Check RNode presets
+        run: npm run test:rnode-presets
       - name: Build frontend
         run: npm run build-frontend
       - name: Build application package
