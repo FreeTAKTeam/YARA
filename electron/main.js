@@ -157,6 +157,11 @@ app.whenReady().then(async () => {
                 resourcesPath: process.resourcesPath,
             });
             await assertPortAvailable(rustPlan.bind);
+            if (rustPlan.importedIdentity) {
+                const message = `YARA copied your MeshChat identity from ${rustPlan.importedIdentity}. Your LXMF address stays the same.\n\nThe original installation is unchanged. Message history was not imported. Close MeshChat before continuing to use this identity in YARA.`;
+                if (shouldLaunchHeadless) log(message);
+                else await dialog.showMessageBox({ type: 'info', title: 'MeshChat identity imported', message });
+            }
         } catch(error) {
             dialog.showErrorBox('YARA startup failed', error.message);
             app.quit();

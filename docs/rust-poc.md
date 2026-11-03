@@ -73,13 +73,49 @@ The packaged app stores its profile in `~/.yara/` (on Windows,
 `%USERPROFILE%\.yara\`). This includes `managed-config.toml`, the identity,
 and the message database. Back up the profile before moving or replacing it;
 the identity determines your address. It is separate from Python MeshChat
-storage, which is not migrated.
+storage. A new YARA profile can copy a MeshChat identity as described below.
 
 The managed config is created once. Later starts preserve saved interface and
 transport changes. If an older `generated-config.toml` exists without a managed
 config, the launcher migrates a copy and leaves the original in place. Startup
 also updates the config's display name from the saved profile (or the
 `RUST_POC_DISPLAY_NAME` override).
+
+## Moving from MeshChat
+
+The source version now imports identities automatically; this behavior is not
+included in the published v1.0.0-alpha.1 binaries.
+
+Before starting YARA for the first time, close MeshChat. If the YARA profile
+does not have an identity yet, the launcher looks for:
+
+- `~/.reticulum-meshchat/identity` (Windows: `%USERPROFILE%\.reticulum-meshchat\identity`);
+- `.reticulum-meshchat/identity` beside the Windows portable executable;
+- `storage/identity` in the checkout when running YARA from source.
+
+It copies the existing private identity into YARA's profile before starting
+the daemon, preserving the LXMF address. The original file is unchanged and
+the copy has owner-only permissions on Unix. YARA reports a successful import
+at startup. Avoid running both clients with the same identity at once.
+
+For a custom MeshChat installation or an identity supplied with MeshChat's
+`--identity-file`, set `YARA_MESHCHAT_IDENTITY` to the full identity-file path
+before launching YARA. If several different identities are detected, startup
+stops and asks you to select one using this variable. An invalid or unreadable
+identity stops startup instead of silently creating a different address.
+
+Existing YARA identities are never replaced, including when an explicit import
+path is set. To try migration alongside an existing YARA profile, select a new
+directory with `RUST_POC_STATE_DIR`; keep the original profile intact. A YARA
+profile with a database but no identity requires restoration of its original
+key before importing. To deliberately create a fresh identity, launch with
+`YARA_IMPORT_MESHCHAT=0`. Without a detected MeshChat identity, the daemon
+creates a new identity as usual.
+
+Only the identity is imported. Display names, messages, attachments, contacts,
+and network settings remain in MeshChat. Its SQLite database cannot be copied
+over YARA's database: the schemas differ, and the daemon has no history-import
+operation yet. Choose your display name and interfaces in YARA after migration.
 
 ## Run from source
 
