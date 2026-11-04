@@ -1,19 +1,14 @@
-YARA v1.0.0-alpha.2 makes RNode interfaces easier to configure and includes the changes since alpha.1.
+YARA v1.0.0-beta.1 is the first v1 beta of the lightweight Reticulum chat client. It repackages the committed alpha.2 functionality with a beta version number; there are no application or daemon changes since alpha.2.
 
-- **RNode presets.** Select Rural fallback (250 kHz, SF11, 4/5), Urban mesh (250 kHz, SF9, 4/5), Extreme range (125 kHz, SF11, 4/8), or Rural fast (500 kHz, SF10, 4/5). All use 915.000 MHz. The selector is available when adding or editing a radio, including each RNode Multi Interface subinterface. Serial port and transmit power stay unchanged; radio values remain editable, and custom settings are recognized automatically. Advanced users can still edit `managed-config.toml` by hand. Save and restart to apply interface changes.
-- **MeshChat identity import.** First launch can copy an existing MeshChat identity while preserving its LXMF address. Existing YARA identities are never replaced. Messages and attachments are not imported; see the setup guide for custom paths and ambiguous-identity handling.
-- **Linux x64 Debian package.** A `.deb` joins the existing portable assets. Its application command is `yara-reticulum`, so it can coexist with the YARA malware scanner. The release build checks package contents and installation, local daemon/UI startup, and removal on Ubuntu 22.04.
-- **macOS window controls.** The app header leaves room for the native window controls.
-
-The bundled daemon remains LXMF-rs commit `1e0e7ef1d6a4e7a5e5832bee1e139a1e15673f45`, the same revision as alpha.1. This release does not upgrade the daemon.
+The beta includes configurable RNode radio presets, MeshChat identity import, and the Linux x64 Debian package. It bundles LXMF-rs commit `1e0e7ef1d6a4e7a5e5832bee1e139a1e15673f45` and the frontend. No Python, Node.js, or separate daemon installation is required. See the [setup guide](https://github.com/FreeTAKTeam/YARA/blob/v1.0.0-beta.1/docs/rust-poc.md) for installation, identity import, and interface configuration.
 
 Downloads:
 
 - Windows x64: portable `.exe`
 - macOS Intel and Apple Silicon: one `.zip` per architecture, containing YARA.app
-- Linux x64: Debian `.deb`
+- Linux x64: Debian `.deb` (`yara-reticulum`)
 - Raspberry Pi OS 64-bit desktop: Linux ARM64 `.AppImage`
 
-The daemon and frontend are bundled; no Python, Node.js, or separate daemon installation is required. See the [setup guide](https://github.com/FreeTAKTeam/YARA/blob/v1.0.0-alpha.2/docs/rust-poc.md).
+**Known issue:** the daemon may remain running after YARA closes, preventing a later launch from binding to the local port. Check for a leftover YARA `reticulumd` process if startup reports that the port is in use.
 
-This is an alpha with unsigned builds. Windows SmartScreen and macOS Gatekeeper may require an explicit override. Interface changes require a restart. Preset and launcher regression checks and the frontend build cover configuration behavior; they do not establish physical-radio delivery, range, or cross-platform hardware acceptance. No new physical RNode or sustained-load qualification was performed for this release. Voice calls and NomadNet remain outside YARA's scope.
+This is an unsigned beta; Windows SmartScreen and macOS Gatekeeper may require an explicit override. Interface changes require a restart. Package and automated checks do not establish physical-radio delivery, range, sustained-load behavior, or cross-platform hardware acceptance. Voice calls and NomadNet are outside YARA's scope.
