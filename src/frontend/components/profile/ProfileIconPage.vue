@@ -75,6 +75,7 @@
 import * as mdi from "@mdi/js";
 import LxmfUserIcon from "../LxmfUserIcon.vue";
 import DialogUtils from "../../js/DialogUtils";
+import GlobalState from "../../js/GlobalState";
 import ColourPickerDropdown from "../ColourPickerDropdown.vue";
 import MaterialDesignIcon from "../MaterialDesignIcon.vue";
 
@@ -123,10 +124,11 @@ export default {
         },
         async updateConfig(config) {
             try {
-                const response = await window.axios.patch("/api/v1/config", config);
+                const body = GlobalState.rustPoc ? { config } : config;
+                const response = await window.axios.patch("/api/v1/config", body);
                 this.config = response.data.config;
             } catch(e) {
-                alert("Failed to save config!");
+                DialogUtils.alert(e.response?.data?.message ?? "Failed to save config!");
                 console.log(e);
             }
         },

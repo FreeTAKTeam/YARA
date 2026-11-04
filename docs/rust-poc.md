@@ -1,11 +1,12 @@
 # Using YARA
 
 YARA is a superfast, lightweight Reticulum chat client built on the LXMF-rs daemon.
-The current release is **v1.0.0-beta.1**. It bundles the frontend and
+The current release is **v1.0.0-beta.2**. It bundles the frontend and
 LXMF-rs at commit `1e0e7ef1d6a4e7a5e5832bee1e139a1e15673f45`
 (v0.16.0 plus the interface-discovery and display-name API from
 [LXMF-rs #713](https://github.com/FreeTAKTeam/LXMF-rs/pull/713)). The daemon and
-frontend communicate locally through the MeshChat-compatible API.
+frontend communicate locally through the MeshChat-compatible API. Beta 2 also
+applies the bundled history-import patch to this pinned backend.
 
 ## Install and start
 
@@ -105,38 +106,51 @@ also updates the config's display name from the saved profile (or the
 
 ## Moving from MeshChat
 
-YARA imports existing MeshChat identities automatically on first launch.
+Beta 2 adds the migration flow below. Beta 1 imported only identities
+automatically and did not import message history.
 
-Before starting YARA for the first time, close MeshChat. If the YARA profile
-does not have an identity yet, the launcher looks for:
+Close MeshChat before starting the import. YARA asks before copying an identity
+or merging messages, shows the source folder and message count, and offers a
+folder picker for custom locations. **Skip import** continues without copying
+anything; **Cancel** closes YARA. Successful or declined offers are recorded in
+`meshchat-import.json` in YARA's profile so the question does not repeat.
 
-- `~/.reticulum-meshchat/identity` (Windows: `%USERPROFILE%\.reticulum-meshchat\identity`);
-- `.reticulum-meshchat/identity` beside the Windows portable executable;
-- `storage/identity` in the checkout when running YARA from source.
+On Windows it checks beside the original portable executable using its directory
+or file environment variables, the executable path and the Windows Desktop
+location. It also checks the home directory and source-checkout `storage/`.
+Supported profile locations include `.reticulum-meshchat/identity` and
+`storage/identity`. A `.reticulum/config` beside the executable is detected as a
+network-config hint. A `.reticulum` folder is treated as a chat profile only if
+it also contains the identity and its MeshChat database; a transport identity
+alone is not automatically imported.
 
-It copies the existing private identity into YARA's profile before starting
-the daemon, preserving the LXMF address. The original file is unchanged and
-the copy has owner-only permissions on Unix. YARA reports a successful import
-at startup. Avoid running both clients with the same identity at once.
+MeshChat stores history at
+`<storage>/identities/<identity-hash>/database.db`, where the hash is derived from
+the selected private key. The native importer reads that database without
+modifying it, then transactionally inserts missing message hashes into YARA's
+own database. Do not copy `database.db` over `reticulum.db`: their schemas differ.
+If no matching message database is found, the dialog explicitly offers only the
+identity. Text, title, incoming/outgoing direction, timestamps, historical status
+and embedded image/audio/file fields are preserved. Imported history is never
+queued for retransmission. Existing YARA messages with the same hash are kept.
 
-For a custom MeshChat installation or an identity supplied with MeshChat's
-`--identity-file`, set `YARA_MESHCHAT_IDENTITY` to the full identity-file path
-before launching YARA. If several different identities are detected, startup
-stops and asks you to select one using this variable. An invalid or unreadable
-identity stops startup instead of silently creating a different address.
+If Beta 1 already copied your identity but omitted messages, the next launch
+can offer the matching MeshChat profile's history. YARA never replaces an
+existing different identity. A profile with a database and a missing identity
+requires restoration of its original key. Contacts, display names and network
+interfaces are not imported; configure those in YARA.
 
-Existing YARA identities are never replaced, including when an explicit import
-path is set. To try migration alongside an existing YARA profile, select a new
-directory with `RUST_POC_STATE_DIR`; keep the original profile intact. A YARA
-profile with a database but no identity requires restoration of its original
-key before importing. To deliberately create a fresh identity, launch with
-`YARA_IMPORT_MESHCHAT=0`. Without a detected MeshChat identity, the daemon
-creates a new identity as usual.
+Set `YARA_MESHCHAT_IDENTITY` to a full identity-file path for an explicit source
+or to retry an offer previously skipped. Its message database must be under the
+same storage root, using the layout above. Desktop launches still ask for
+confirmation. Headless/source CLI launches require this explicit source to
+import and otherwise create/use their own identity. `YARA_IMPORT_MESHCHAT=0`
+disables the offer and import. To test migration separately, use a new
+`RUST_POC_STATE_DIR` and retain your original profile.
 
-Only the identity is imported. Display names, messages, attachments, contacts,
-and network settings remain in MeshChat. Its SQLite database cannot be copied
-over YARA's database: the schemas differ, and the daemon has no history-import
-operation yet. Choose your display name and interfaces in YARA after migration.
+The source includes a migration patch for the pinned LXMF-rs backend and a
+bundled `meshchat-import` binary. Both native binaries must be built from that
+patched source. The release build stages both binaries in the application.
 
 ## Run from source
 
@@ -148,7 +162,8 @@ change an existing `../LXMF-rs` checkout:
 ```bash
 git clone https://github.com/FreeTAKTeam/LXMF-rs.git ../LXMF-rs-yara
 git -C ../LXMF-rs-yara checkout 1e0e7ef1d6a4e7a5e5832bee1e139a1e15673f45
-(cd ../LXMF-rs-yara && cargo build --locked -p reticulumd --bin reticulumd)
+git -C ../LXMF-rs-yara apply "$(pwd)/patches/lxmf-rs-meshchat-import.patch"
+(cd ../LXMF-rs-yara && cargo build --locked -p reticulumd --bin reticulumd --bin meshchat-import)
 npm ci
 npm run build-frontend
 RUST_POC_LXMF_RS_ROOT="$(pwd)/../LXMF-rs-yara" ./scripts/run-rust-poc.sh tcp

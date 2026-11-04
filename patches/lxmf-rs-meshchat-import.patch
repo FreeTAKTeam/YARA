@@ -1,0 +1,588 @@
+diff --git a/crates/apps/reticulumd/src/lib.rs b/crates/apps/reticulumd/src/lib.rs
+--- a/crates/apps/reticulumd/src/lib.rs
++++ b/crates/apps/reticulumd/src/lib.rs
+@@ -4,6 +4,7 @@
+ pub mod inbound_delivery;
+ pub mod lxmf_bridge;
+ pub mod lxmf_stamps;
++pub mod meshchat_import;
+ pub mod paper_interchange;
+ pub mod receipt_bridge;
+ pub mod rns_crypto;
+diff --git a/crates/apps/reticulumd/src/bin/meshchat-import.rs b/crates/apps/reticulumd/src/bin/meshchat-import.rs
+new file mode 100644
+--- /dev/null
++++ b/crates/apps/reticulumd/src/bin/meshchat-import.rs
+@@ -0,0 +1,33 @@
++use clap::Parser;
++use std::{path::PathBuf, process::ExitCode};
++
++#[derive(Parser)]
++#[command(about = "Inspect or import MeshChat history while both clients are closed")]
++struct Args {
++    #[arg(long)]
++    source_identity: PathBuf,
++    #[arg(long, requires = "db")]
++    identity: Option<PathBuf>,
++    #[arg(long, requires = "identity")]
++    db: Option<PathBuf>,
++}
++
++fn main() -> ExitCode {
++    let args = Args::parse();
++    let result = match (&args.identity, &args.db) {
++        (Some(identity), Some(db)) => {
++            reticulum_daemon::meshchat_import::import(&args.source_identity, identity, db)
++        }
++        _ => reticulum_daemon::meshchat_import::inspect(&args.source_identity),
++    };
++    match result {
++        Ok(summary) => {
++            println!("{summary}");
++            ExitCode::SUCCESS
++        }
++        Err(error) => {
++            eprintln!("{error}");
++            ExitCode::FAILURE
++        }
++    }
++}
+diff --git a/crates/apps/reticulumd/src/meshchat_import.rs b/crates/apps/reticulumd/src/meshchat_import.rs
+new file mode 100644
+--- /dev/null
++++ b/crates/apps/reticulumd/src/meshchat_import.rs
+@@ -0,0 +1,119 @@
++//! Offline MeshChat profile inspection and identity-checked history migration.
++use rns_rpc::MessagesStore;
++use rns_transport::{
++    destination::{DestinationName, SingleInputDestination},
++    identity::PrivateIdentity,
++};
++use rusqlite::{Connection, OpenFlags};
++use serde_json::{json, Value};
++use std::{fs, io, path::Path};
++
++fn failure(error: impl std::fmt::Display) -> io::Error {
++    io::Error::new(io::ErrorKind::InvalidData, error.to_string())
++}
++
++pub fn inspect(source_identity: &Path) -> io::Result<Value> {
++    let key = fs::read(source_identity)?;
++    inspect_key(source_identity, &key)
++}
++
++fn inspect_key(source_identity: &Path, key: &[u8]) -> io::Result<Value> {
++    let identity = PrivateIdentity::from_private_key_bytes(key)
++        .map_err(|_| failure("MeshChat identity must be a 64-byte private identity"))?;
++    let identity_hash = hex::encode(identity.address_hash().as_slice());
++    let destination =
++        SingleInputDestination::new(identity, DestinationName::new("lxmf", "delivery"));
++    let local = hex::encode(destination.desc.address_hash.as_slice());
++    let source_db = source_identity
++        .parent()
++        .ok_or_else(|| failure("Identity has no profile folder"))?
++        .join("identities")
++        .join(&identity_hash)
++        .join("database.db");
++    let (database_path, count) = if source_db.try_exists()? {
++        let conn = Connection::open_with_flags(&source_db, OpenFlags::SQLITE_OPEN_READ_ONLY)
++            .map_err(failure)?;
++        conn.prepare("SELECT id, hash, source_hash, destination_hash, is_incoming, title, content, timestamp, fields, state, progress FROM lxmf_messages LIMIT 0")
++            .map_err(|error| failure(format!("Not a supported MeshChat message database: {error}")))?;
++        let count: i64 = conn
++            .query_row("SELECT COUNT(*) FROM lxmf_messages", [], |row| row.get(0))
++            .map_err(failure)?;
++        (Some(source_db), count)
++    } else {
++        (None, 0)
++    };
++    Ok(json!({"identity_hash":identity_hash,"lxmf_address_hash":local,
++        "database_path":database_path,"message_count":count}))
++}
++
++pub fn import(
++    source_identity: &Path,
++    target_identity: &Path,
++    target_db: &Path,
++) -> io::Result<Value> {
++    let source_key = fs::read(source_identity)?;
++    if fs::read(target_identity)? != source_key {
++        return Err(failure(
++            "MeshChat identity does not match this YARA profile; its identity was not replaced",
++        ));
++    }
++    let mut summary = inspect_key(source_identity, &source_key)?;
++    if let Some(source_db) = summary["database_path"].as_str() {
++        let source_db = Path::new(source_db);
++        if target_db.try_exists()? && source_db.canonicalize()? == target_db.canonicalize()? {
++            return Err(failure("Source and target message databases must be different"));
++        }
++        let store = MessagesStore::open(target_db).map_err(failure)?;
++        let result = store
++            .import_meshchat_history(
++                source_db,
++                summary["lxmf_address_hash"]
++                    .as_str()
++                    .ok_or_else(|| failure("Missing local destination"))?,
++            )
++            .map_err(|error| {
++                failure(format!("MeshChat history import failed; no messages were added: {error}"))
++            })?;
++        summary
++            .as_object_mut()
++            .ok_or_else(|| failure("Invalid import summary"))?
++            .extend(result.as_object().ok_or_else(|| failure("Invalid history summary"))?.clone());
++    } else {
++        summary["imported"] = json!(0);
++        summary["skipped"] = json!(0);
++    }
++    Ok(summary)
++}
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++
++    #[test]
++    fn meshchat_inspection_derives_profile_path_and_rejects_invalid_or_mismatched_keys() {
++        let root = tempfile::tempdir().unwrap();
++        let source = root.path().join("identity");
++        fs::write(&source, [1u8; 64]).unwrap();
++        let summary = inspect(&source).unwrap();
++        assert!(summary["database_path"].is_null());
++        let database = root
++            .path()
++            .join("identities")
++            .join(summary["identity_hash"].as_str().unwrap())
++            .join("database.db");
++        fs::create_dir_all(database.parent().unwrap()).unwrap();
++        let conn = Connection::open(&database).unwrap();
++        conn.execute_batch("CREATE TABLE lxmf_messages (id INTEGER, hash TEXT, source_hash TEXT, destination_hash TEXT, is_incoming INTEGER, title TEXT, content TEXT, timestamp REAL, fields TEXT, state TEXT, progress REAL)").unwrap();
++        assert_eq!(inspect(&source).unwrap()["database_path"], database.to_string_lossy().as_ref());
++        let target = root.path().join("target-key");
++        fs::write(&target, [2u8; 64]).unwrap();
++        let target_db = root.path().join("target.db");
++        assert!(import(&source, &target, &target_db)
++            .unwrap_err()
++            .to_string()
++            .contains("does not match"));
++        assert!(!target_db.exists());
++        fs::write(&source, b"invalid").unwrap();
++        assert!(inspect(&source).is_err());
++    }
++}
+diff --git a/crates/libs/rns-rpc/src/storage/messages.rs b/crates/libs/rns-rpc/src/storage/messages.rs
+--- a/crates/libs/rns-rpc/src/storage/messages.rs
++++ b/crates/libs/rns-rpc/src/storage/messages.rs
+@@ -1,4 +1,6 @@
+ include!("messages_parts/module_prelude.rs");
++
++mod meshchat_import;
+
+ include!("messages_parts/messagesstore.rs");
+
+diff --git a/crates/libs/rns-rpc/src/storage/messages/meshchat_import.rs b/crates/libs/rns-rpc/src/storage/messages/meshchat_import.rs
+new file mode 100644
+--- /dev/null
++++ b/crates/libs/rns-rpc/src/storage/messages/meshchat_import.rs
+@@ -0,0 +1,182 @@
++//! Read-only legacy history import; imported outbound rows never enter delivery queues.
++use super::{params, Connection, MessagesStore, OpenFlags, Ordering};
++use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
++use rusqlite::{types::ValueRef, Row};
++use serde_json::{json, Map, Value};
++use std::{io, path::Path};
++
++fn invalid(message: impl Into<String>) -> rusqlite::Error {
++    rusqlite::Error::ToSqlConversionFailure(Box::new(io::Error::new(
++        io::ErrorKind::InvalidData,
++        message.into(),
++    )))
++}
++
++fn text(row: &Row<'_>, name: &str) -> rusqlite::Result<String> {
++    match row.get_ref(name)? {
++        ValueRef::Text(bytes) if bytes.len() <= 52_428_800 => std::str::from_utf8(bytes)
++            .map(str::to_owned)
++            .map_err(|_| invalid(format!("MeshChat {name} is not UTF-8"))),
++        _ => Err(invalid(format!("Invalid or oversized MeshChat {name}"))),
++    }
++}
++
++fn hex_text(row: &Row<'_>, name: &str, length: usize) -> rusqlite::Result<String> {
++    let value = text(row, name)?;
++    if value.len() != length || !value.bytes().all(|byte| byte.is_ascii_hexdigit()) {
++        return Err(invalid(format!("Invalid MeshChat {name}")));
++    }
++    Ok(value.to_ascii_lowercase())
++}
++
++fn metadata(row: &Row<'_>) -> rusqlite::Result<Map<String, Value>> {
++    let mut result = Map::new();
++    for name in [
++        "state",
++        "progress",
++        "method",
++        "delivery_attempts",
++        "rssi",
++        "snr",
++        "quality",
++        "created_at",
++        "updated_at",
++    ] {
++        let index = match row.as_ref().column_index(name) {
++            Ok(index) => index,
++            Err(_) if matches!(name, "state" | "progress") => {
++                return Err(invalid(format!("Missing MeshChat {name}")))
++            }
++            Err(_) => continue,
++        };
++        let value = match row.get_ref(index)? {
++            ValueRef::Null => Value::Null,
++            ValueRef::Integer(value) => json!(value),
++            ValueRef::Real(value) if value.is_finite() => json!(value),
++            ValueRef::Text(_) => json!(text(row, name)?),
++            _ => return Err(invalid(format!("Invalid MeshChat {name}"))),
++        };
++        let valid = match name {
++            "state" => value.as_str().is_some_and(|state| {
++                matches!(
++                    state,
++                    "unknown"
++                        | "generating"
++                        | "draft"
++                        | "outbound"
++                        | "sending"
++                        | "sent"
++                        | "delivered"
++                        | "failed"
++                        | "cancelled"
++                        | "rejected"
++                )
++            }),
++            "progress" => value.as_f64().is_some_and(|number| (0.0..=100.0).contains(&number)),
++            "delivery_attempts" => value.as_i64().is_some_and(|number| number >= 0),
++            "rssi" | "snr" | "quality" => value.is_null() || value.as_f64().is_some(),
++            _ => value.is_null() || value.as_str().is_some(),
++        };
++        if !valid {
++            return Err(invalid(format!("Invalid MeshChat {name}")));
++        }
++        result.insert(name.into(), value);
++    }
++    Ok(result)
++}
++
++fn validate_fields(fields: &Map<String, Value>) -> rusqlite::Result<()> {
++    let valid_bytes = |value: Option<&Value>| {
++        value.and_then(Value::as_str).is_some_and(|encoded| BASE64.decode(encoded).is_ok())
++    };
++    if let Some(files) = fields.get("file_attachments") {
++        let valid = files.as_array().is_some_and(|files| {
++            files.iter().all(|file| {
++                file.get("file_name")
++                    .and_then(Value::as_str)
++                    .is_some_and(|name| !name.is_empty() && !name.contains(['/', '\\', '\0']))
++                    && valid_bytes(file.get("file_bytes"))
++            })
++        });
++        if !valid {
++            return Err(invalid("Invalid MeshChat file attachments"));
++        }
++    }
++    for (key, kind, bytes) in
++        [("image", "image_type", "image_bytes"), ("audio", "audio_mode", "audio_bytes")]
++    {
++        if let Some(value) = fields.get(key) {
++            let valid_kind = if key == "audio" {
++                value.get(kind).and_then(Value::as_u64).is_some()
++            } else {
++                value.get(kind).and_then(Value::as_str).is_some_and(|kind| {
++                    !kind.is_empty()
++                        && kind.len() <= 16
++                        && kind.chars().all(|ch| ch.is_ascii_alphanumeric())
++                })
++            };
++            if !valid_kind || !valid_bytes(value.get(bytes)) {
++                return Err(invalid(format!("Invalid MeshChat {key}")));
++            }
++        }
++    }
++    Ok(())
++}
++
++impl MessagesStore {
++    /// Merge a legacy database while offline. Existing hashes are never overwritten.
++    pub fn import_meshchat_history(&self, source: &Path, local: &str) -> rusqlite::Result<Value> {
++        if self.durable_broker_enabled()? {
++            return Err(invalid(
++                "MeshChat history cannot be imported into a durable broker profile",
++            ));
++        }
++        let source = Connection::open_with_flags(source, OpenFlags::SQLITE_OPEN_READ_ONLY)?;
++        let snapshot = source.unchecked_transaction()?;
++        let mut select = snapshot.prepare("SELECT * FROM lxmf_messages ORDER BY timestamp, id")?;
++        let mut rows = select.query([])?;
++        self.with_write_conn(|conn| {
++            let tx = conn.unchecked_transaction()?;
++            let mut inserted = 0u64;
++            let mut total = 0u64;
++            while let Some(row) = rows.next()? {
++                let id = hex_text(row, "hash", 64)?;
++                let source = hex_text(row, "source_hash", 32)?;
++                let destination = hex_text(row, "destination_hash", 32)?;
++                let incoming: i64 = row.get("is_incoming")?;
++                if !matches!(incoming, 0 | 1)
++                    || (incoming == 1 && destination != local)
++                    || (incoming == 0 && source != local)
++                {
++                    return Err(invalid(format!("MeshChat message {id} does not belong to this identity")));
++                }
++                let timestamp: f64 = row.get("timestamp")?;
++                if !timestamp.is_finite() || timestamp < 0.0 || timestamp >= i64::MAX as f64 {
++                    return Err(invalid(format!("Invalid timestamp for MeshChat message {id}")));
++                }
++                let mut fields: Map<String, Value> = serde_json::from_str(&text(row, "fields")?)
++                    .map_err(|_| invalid(format!("Invalid fields for MeshChat message {id}")))?;
++                if fields.contains_key("_meshchat_import") {
++                    return Err(invalid("MeshChat fields contain reserved import metadata"));
++                }
++                validate_fields(&fields)?;
++                let mut historical = metadata(row)?;
++                historical.insert("timestamp".into(), json!(timestamp));
++                fields.insert("_meshchat_import".into(), Value::Object(historical));
++                inserted += tx.execute(
++                    "INSERT INTO messages (id, source, destination, title, content, timestamp, direction, fields, receipt_status)
++                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, 'cancelled') ON CONFLICT(id) DO NOTHING",
++                    params![id, source, destination, text(row, "title")?, text(row, "content")?, timestamp.floor() as i64,
++                        if incoming == 1 { "in" } else { "out" }, Value::Object(fields).to_string()],
++                )? as u64;
++                total += 1;
++            }
++            tx.commit()?;
++            self.write_state.message_count_cache.fetch_add(inserted, Ordering::Relaxed);
++            Ok(json!({"imported":inserted,"skipped":total-inserted,"total":total}))
++        })
++    }
++}
++
++#[cfg(test)]
++mod tests;
+diff --git a/crates/libs/rns-rpc/src/storage/messages/meshchat_import/tests.rs b/crates/libs/rns-rpc/src/storage/messages/meshchat_import/tests.rs
+new file mode 100644
+--- /dev/null
++++ b/crates/libs/rns-rpc/src/storage/messages/meshchat_import/tests.rs
+@@ -0,0 +1,104 @@
++use super::*;
++
++const LOCAL: &str = "11111111111111111111111111111111";
++const PEER: &str = "22222222222222222222222222222222";
++
++fn legacy() -> (tempfile::TempDir, std::path::PathBuf, Connection) {
++    let root = tempfile::tempdir().unwrap();
++    let path = root.path().join("legacy.db");
++    let conn = Connection::open(&path).unwrap();
++    conn.execute_batch(
++        "PRAGMA journal_mode=WAL; CREATE TABLE lxmf_messages (
++        id INTEGER PRIMARY KEY, hash TEXT, source_hash TEXT, destination_hash TEXT,
++        is_incoming INTEGER, title TEXT, content TEXT, timestamp REAL, fields TEXT,
++        state TEXT, progress REAL, method TEXT, created_at TEXT, updated_at TEXT);",
++    )
++    .unwrap();
++    (root, path, conn)
++}
++
++fn insert(conn: &Connection, index: u8, incoming: bool, timestamp: f64) {
++    conn.execute("INSERT INTO lxmf_messages VALUES (?1, ?2, ?3, ?4, ?5, 'title', 'old message', ?6, ?7, 'outbound', 12.5, 'direct', '2026-10-01 00:00:00', '2026-10-01 00:00:01')",
++        params![index, format!("{index:064x}"), if incoming {PEER} else {LOCAL}, if incoming {LOCAL} else {PEER}, incoming as i64, timestamp,
++            json!({"file_attachments":[{"file_name":"test.txt","file_bytes":"aGk="}]}).to_string()]).unwrap();
++}
++
++#[test]
++fn meshchat_import_preserves_wal_history_and_never_retries_or_overwrites() {
++    let (_root, path, conn) = legacy();
++    insert(&conn, 1, false, 100.25);
++    insert(&conn, 2, true, 101.5);
++    let before = std::fs::read(&path).unwrap();
++    let wal_before = std::fs::read(path.with_file_name("legacy.db-wal")).unwrap();
++    let target = MessagesStore::in_memory().unwrap();
++    assert_eq!(target.import_meshchat_history(&path, LOCAL).unwrap()["imported"], 2);
++    let record = target.get_message(&format!("{:064x}", 1)).unwrap().unwrap();
++    assert_eq!(record.receipt_status.as_deref(), Some("cancelled"));
++    assert_eq!(record.timestamp, 100);
++    assert_eq!(record.fields.as_ref().unwrap()["_meshchat_import"]["timestamp"], 100.25);
++    assert_eq!(record.fields.as_ref().unwrap()["file_attachments"][0]["file_bytes"], "aGk=");
++    assert!(target.list_retryable_outbound_for_destination(PEER).unwrap().is_empty());
++    assert_eq!(std::fs::read(path.with_file_name("legacy.db-wal")).unwrap(), wal_before);
++    conn.execute("UPDATE lxmf_messages SET content='changed'", []).unwrap();
++    assert_eq!(target.import_meshchat_history(&path, LOCAL).unwrap()["skipped"], 2);
++    assert_eq!(target.get_message(&record.id).unwrap().unwrap(), record);
++    assert_eq!(target.message_count().unwrap(), 2);
++    // Read-only import did not checkpoint or rewrite the source main database.
++    assert_eq!(std::fs::read(path).unwrap(), before);
++    assert!(!wal_before.is_empty());
++}
++
++#[test]
++fn meshchat_import_rolls_back_corrupt_or_wrong_identity_rows() {
++    let (_root, path, conn) = legacy();
++    insert(&conn, 1, false, 100.0);
++    insert(&conn, 2, true, 101.0);
++    let target = MessagesStore::in_memory().unwrap();
++    conn.execute("UPDATE lxmf_messages SET fields='invalid' WHERE id=2", []).unwrap();
++    assert!(target.import_meshchat_history(&path, LOCAL).is_err());
++    assert_eq!(target.message_count().unwrap(), 0);
++    conn.execute("UPDATE lxmf_messages SET fields='{}', progress='bad' WHERE id=2", []).unwrap();
++    assert!(target.import_meshchat_history(&path, LOCAL).is_err());
++    assert_eq!(target.message_count().unwrap(), 0);
++    conn.execute("UPDATE lxmf_messages SET progress=0 WHERE id=2", []).unwrap();
++    conn.execute("UPDATE lxmf_messages SET fields='{}', destination_hash=?1 WHERE id=2", [PEER])
++        .unwrap();
++    assert!(target.import_meshchat_history(&path, LOCAL).is_err());
++    assert_eq!(target.message_count().unwrap(), 0);
++}
++
++#[test]
++fn meshchat_import_merges_chronological_pages_with_newer_native_messages() {
++    let (_root, path, conn) = legacy();
++    insert(&conn, 1, false, 100.25);
++    insert(&conn, 2, true, 101.5);
++    let target = MessagesStore::in_memory().unwrap();
++    target
++        .insert_message(&crate::MessageRecord {
++            id: "native".into(),
++            source: LOCAL.into(),
++            destination: PEER.into(),
++            title: String::new(),
++            content: "newer".into(),
++            timestamp: 200,
++            direction: "out".into(),
++            fields: None,
++            receipt_status: Some("delivered".into()),
++        })
++        .unwrap();
++    target.import_meshchat_history(&path, LOCAL).unwrap();
++    let first = target.list_meshchat_conversation(PEER, None, false, 1).unwrap();
++    assert_eq!(first[0].1.timestamp, 100);
++    let next = target.list_meshchat_conversation(PEER, Some(first[0].0), false, 2).unwrap();
++    assert_eq!(next.iter().map(|(_, msg)| msg.timestamp).collect::<Vec<_>>(), [101, 200]);
++    let newest = target.list_meshchat_conversation(PEER, None, true, 1).unwrap();
++    assert_eq!(newest[0].1.timestamp, 200);
++    let older = target.list_meshchat_conversation(PEER, Some(newest[0].0), true, 2).unwrap();
++    assert_eq!(older.iter().map(|(_, msg)| msg.timestamp).collect::<Vec<_>>(), [101, 100]);
++    insert(&conn, 3, true, 100.125);
++    target.import_meshchat_history(&path, LOCAL).unwrap();
++    let oldest = target.list_meshchat_conversation(PEER, None, false, 1).unwrap();
++    assert_eq!(oldest[0].1.id, format!("{:064x}", 3));
++    let after = target.list_meshchat_conversation(PEER, Some(oldest[0].0), false, 1).unwrap();
++    assert_eq!(after[0].1.id, format!("{:064x}", 1));
++}
+diff --git a/crates/libs/rns-rpc/src/storage/messages_parts/messagesstore_sections/meshchat_delete.rs b/crates/libs/rns-rpc/src/storage/messages_parts/messagesstore_sections/meshchat_delete.rs
+--- a/crates/libs/rns-rpc/src/storage/messages_parts/messagesstore_sections/meshchat_delete.rs
++++ b/crates/libs/rns-rpc/src/storage/messages_parts/messagesstore_sections/meshchat_delete.rs
+@@ -9,10 +9,14 @@
+         self.with_read_conn(|conn| {
+             let comparison = if descending { "<" } else { ">" };
+             let ordering = if descending { "DESC" } else { "ASC" };
++            let timestamp = "CASE WHEN receipt_status = 'cancelled' AND json_valid(fields) \
++                THEN COALESCE(json_extract(fields, '$._meshchat_import.timestamp'), timestamp) ELSE timestamp END";
+             let query = format!(
+                 "SELECT id, source, destination, title, content, timestamp, direction, fields, receipt_status, rowid \
+                  FROM messages WHERE (LOWER(source) = LOWER(?1) OR LOWER(destination) = LOWER(?1)) \
+-                 AND (?2 IS NULL OR rowid {comparison} ?2) ORDER BY rowid {ordering} LIMIT ?3"
++                 AND (?2 IS NULL OR ({timestamp}, rowid) {comparison} \
++                     ((SELECT {timestamp} FROM messages WHERE rowid = ?2), ?2)) \
++                 ORDER BY ({timestamp}) {ordering}, rowid {ordering} LIMIT ?3"
+             );
+             let mut statement = conn.prepare(&query)?;
+             let mut rows = statement.query(params![destination, after_id, limit.min(i64::MAX as usize) as i64])?;
+diff --git a/crates/libs/meshchat-api/src/chat.rs b/crates/libs/meshchat-api/src/chat.rs
+--- a/crates/libs/meshchat-api/src/chat.rs
++++ b/crates/libs/meshchat-api/src/chat.rs
+@@ -1,3 +1,5 @@
++mod imported_history;
++
+ use crate::{ApiError, ApiResult, AppState};
+ use axum::{
+     extract::{Path, Query, State},
+@@ -361,7 +363,7 @@
+             fields.insert("telemetry".into(), sideband_telemetry(&bytes));
+         }
+     }
+-    json!({
++    let mut message = json!({
+         "hash":record.get("id"),"source_hash":record.get("source"),
+         "destination_hash":record.get("destination"),"is_incoming":incoming,
+         "state":state,"progress":if state == "delivered" {100.0} else {0.0},
+@@ -371,7 +373,11 @@
+         "content":record.get("content").and_then(Value::as_str).unwrap_or(""),
+         "fields":fields,"timestamp":timestamp,"rssi":null,"snr":null,"quality":null,
+         "id":0,"created_at":timestamp.to_string(),"updated_at":timestamp.to_string()
+-    })
++    });
++    if status == "cancelled" {
++        imported_history::apply(&mut message, raw_fields);
++    }
++    message
+ }
+
+ fn sideband_telemetry(bytes: &[u8]) -> Value {
+diff --git a/crates/libs/meshchat-api/src/chat/imported_history.rs b/crates/libs/meshchat-api/src/chat/imported_history.rs
+new file mode 100644
+--- /dev/null
++++ b/crates/libs/meshchat-api/src/chat/imported_history.rs
+@@ -0,0 +1,26 @@
++use serde_json::{json, Value};
++
++pub(super) fn apply(message: &mut Value, fields: Option<&Value>) {
++    let Some(fields) = fields.and_then(Value::as_object) else { return };
++    let Some(history) = fields.get("_meshchat_import").and_then(Value::as_object) else { return };
++    for key in [
++        "state",
++        "progress",
++        "method",
++        "timestamp",
++        "delivery_attempts",
++        "rssi",
++        "snr",
++        "quality",
++        "created_at",
++        "updated_at",
++    ] {
++        if let Some(value) = history.get(key) {
++            message[key] = value.clone();
++        }
++    }
++    let mut fields = fields.clone();
++    fields.remove("_meshchat_import");
++    message["fields"] = Value::Object(fields);
++    message["imported"] = json!(true);
++}
+diff --git a/crates/libs/meshchat-api/src/tests.rs b/crates/libs/meshchat-api/src/tests.rs
+--- a/crates/libs/meshchat-api/src/tests.rs
++++ b/crates/libs/meshchat-api/src/tests.rs
+@@ -355,6 +355,24 @@
+     assert!(value["config"]["last_announced_at"].as_u64().is_some());
+ }
+
++#[test]
++fn imported_meshchat_history_preserves_presentation_without_exposing_metadata() {
++    let record = json!({"id":"message-hash","source":"source","destination":"destination",
++        "direction":"out","receipt_status":"cancelled","timestamp":100,"title":"title","content":"body",
++        "fields":{"file_attachments":[{"file_name":"test.txt","file_bytes":"aGk="}],
++            "_meshchat_import":{"state":"sent","progress":100.0,"timestamp":100.75,"method":"direct",
++                "created_at":"2026-10-01 00:00:00","updated_at":"2026-10-01 00:00:01"}}});
++    let message = chat::stored_message(&record);
++    assert_eq!(message["hash"], "message-hash");
++    assert_eq!(message["timestamp"], 100.75);
++    assert_eq!(message["state"], "sent");
++    assert_eq!(message["method"], "direct");
++    assert_eq!(message["fields"]["file_attachments"][0]["file_bytes"], "aGk=");
++    assert!(message["fields"].get("_meshchat_import").is_none());
++    assert_eq!(message["created_at"], "2026-10-01 00:00:00");
++    assert_eq!(message["imported"], true);
++}
++
+ #[tokio::test]
+ async fn config_patch_rejects_daemon_keys_without_claiming_success() {
+     let daemon = Arc::new(RpcDaemon::test_instance());

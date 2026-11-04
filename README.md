@@ -68,10 +68,11 @@ interface, and restart YARA after changing interfaces or transport. In
 LXMF address. See the [usage and build guide](docs/rust-poc.md) for setup,
 messaging, RNode, storage, and source-build instructions.
 
-On first launch, YARA automatically copies an existing MeshChat identity from
-the standard storage location, keeping your LXMF address. Existing YARA
-identities are preserved. See [MeshChat migration](docs/rust-poc.md#moving-from-meshchat)
-for custom locations and limitations; message history is not yet imported.
+Beta 2 offers to import a MeshChat identity and message history, keeping your LXMF
+address. It checks standard and adjacent portable folders and lets you choose
+a custom folder. Existing matching YARA identities can recover missing history
+after Beta 1. See [MeshChat migration](docs/rust-poc.md#moving-from-meshchat) for
+source locations, consent and limitations.
 
 ## Current integration
 

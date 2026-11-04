@@ -2,7 +2,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { spawn } = require('node:child_process');
-const { importMeshchatIdentity } = require('./meshchat-identity');
+const { offerMeshchatImport } = require('./meshchat-import');
 
 const DEFAULT_SETTINGS = {
     mode: 'tcp',
@@ -225,7 +225,7 @@ function prepareLaunch(options = {}) {
             throw error;
         }
     }
-    const importedIdentity = importMeshchatIdentity({ stateDir, homeDir, repoRoot, packaged, platform, env });
+    const importer = path.join(path.dirname(binary), platform === 'win32' ? 'meshchat-import.exe' : 'meshchat-import');
     const args = [
         '--db', path.join(stateDir, 'reticulum.db'),
         '--identity', path.join(stateDir, 'identity'),
@@ -235,19 +235,19 @@ function prepareLaunch(options = {}) {
         '--meshchat-bind', bind,
         '--meshchat-assets', assets,
     ];
-    return { binary, args, bind, config, mode: firstLaunch ? mode : 'managed', settingsFile, stateDir, importedIdentity };
+    return { binary, args, bind, config, mode: firstLaunch ? mode : 'managed', settingsFile, stateDir, importer,
+        migration: { stateDir, homeDir, repoRoot, packaged, platform, env,
+            executablePath: options.executablePath || process.execPath, desktopDir: options.desktopDir } };
 }
 
 module.exports = { prepareLaunch, createConfig, readSettings, saveSettings, normalizeSettings, migrateLegacyConfig, DEFAULT_SETTINGS };
 
 if (require.main === module) {
-    try {
+    (async () => { try {
         const plan = prepareLaunch({ mode: process.argv[2] });
+        await offerMeshchatImport({ ...plan.migration, importer: plan.importer, headless: true });
         console.log(`YARA Rust client: ${plan.mode} on http://${plan.bind}`);
         console.log(`Config: ${plan.config}`);
-        if (plan.importedIdentity) {
-            console.log(`Imported MeshChat identity from ${plan.importedIdentity}. The source is unchanged; message history was not imported. Close MeshChat before using YARA with this identity.`);
-        }
         const child = spawn(plan.binary, plan.args, { stdio: 'inherit' });
         process.on('SIGINT', () => child.kill('SIGINT'));
         process.on('SIGTERM', () => child.kill('SIGTERM'));
@@ -256,5 +256,5 @@ if (require.main === module) {
     } catch (error) {
         console.error(error.message);
         process.exitCode = 2;
-    }
+    } })();
 }

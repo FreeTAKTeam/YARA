@@ -180,14 +180,15 @@
                             <!-- state label -->
                             <div class="my-auto">
                                 <span @click="showSentMessageInfo(chatItem.lxmf_message)" class="space-x-1 cursor-pointer">
+                                    <span v-if="chatItem.lxmf_message.imported">Imported history ·</span>
                                     <span class="capitalize">{{ chatItem.lxmf_message.state }}</span>
                                     <span v-if="chatItem.lxmf_message.state === 'outbound' && chatItem.lxmf_message.delivery_attempts >= 1">(attempt {{ chatItem.lxmf_message.delivery_attempts + 1 }})</span>
                                     <span v-if="chatItem.lxmf_message.state === 'sent' && chatItem.lxmf_message.method === 'opportunistic' && chatItem.lxmf_message.delivery_attempts >= 1">(attempt {{ chatItem.lxmf_message.delivery_attempts }})</span>
                                     <span v-if="chatItem.lxmf_message.state === 'sent' && chatItem.lxmf_message.method === 'propagated'">to propagation node</span>
                                     <span v-if="chatItem.lxmf_message.state === 'sending'">{{ chatItem.lxmf_message.progress.toFixed(0) }}%</span>
                                 </span>
-                                <a v-if="chatItem.lxmf_message.state === 'outbound' || chatItem.lxmf_message.state === 'sending' || chatItem.lxmf_message.state === 'sent'" @click="cancelSendingMessage(chatItem)" class="ml-2 cursor-pointer font-ui font-bold uppercase tracking-[0.07em] text-rem-button">Cancel</a>
-                                <a v-if="chatItem.lxmf_message.state === 'failed'" @click="retrySendingMessage(chatItem)" class="ml-2 cursor-pointer font-ui font-bold uppercase tracking-[0.07em] text-rem-button">Retry</a>
+                                <a v-if="!chatItem.lxmf_message.imported && ['outbound', 'sending', 'sent'].includes(chatItem.lxmf_message.state)" @click="cancelSendingMessage(chatItem)" class="ml-2 cursor-pointer font-ui font-bold uppercase tracking-[0.07em] text-rem-button">Cancel</a>
+                                <a v-if="!chatItem.lxmf_message.imported && chatItem.lxmf_message.state === 'failed'" @click="retrySendingMessage(chatItem)" class="ml-2 cursor-pointer font-ui font-bold uppercase tracking-[0.07em] text-rem-button">Retry</a>
                             </div>
 
                             <!-- delivered icon -->

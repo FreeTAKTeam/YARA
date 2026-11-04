@@ -5,6 +5,7 @@ const fs = require('fs');
 const net = require('node:net');
 const path = require('node:path');
 const { prepareLaunch } = require('./rust-poc-launcher');
+const { offerMeshchatImport } = require('./meshchat-import');
 
 // remember main window
 var mainWindow = null;
@@ -155,12 +156,14 @@ app.whenReady().then(async () => {
             rustPlan = prepareLaunch({
                 packaged: app.isPackaged,
                 resourcesPath: process.resourcesPath,
+                executablePath: app.getPath('exe'),
+                desktopDir: app.getPath('desktop'),
             });
             await assertPortAvailable(rustPlan.bind);
-            if (rustPlan.importedIdentity) {
-                const message = `YARA copied your MeshChat identity from ${rustPlan.importedIdentity}. Your LXMF address stays the same.\n\nThe original installation is unchanged. Message history was not imported. Close MeshChat before continuing to use this identity in YARA.`;
-                if (shouldLaunchHeadless) log(message);
-                else await dialog.showMessageBox({ type: 'info', title: 'MeshChat identity imported', message });
+            if (!await offerMeshchatImport({ ...rustPlan.migration, importer: rustPlan.importer,
+                dialog, headless: shouldLaunchHeadless })) {
+                app.quit();
+                return;
             }
         } catch(error) {
             dialog.showErrorBox('YARA startup failed', error.message);
