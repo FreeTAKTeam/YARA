@@ -3,10 +3,11 @@ const os = require('node:os');
 const path = require('node:path');
 const { spawn } = require('node:child_process');
 const { offerMeshchatImport } = require('./meshchat-import');
+const { readProfiles, profileDir } = require('./identity-profiles');
 
 const DEFAULT_SETTINGS = {
     mode: 'tcp',
-    tcp: { host: 'rmap.world', port: 4242 },
+    tcp: { host: '134.122.46.48', port: 37428 },
     rnode: {
         port: '',
         frequency: 915000000,
@@ -134,7 +135,7 @@ function createConfig(settings, mode, stateDir, env, platform, settingsFile) {
         throw new Error('tcp.host must be a nonempty hostname');
     }
     const port = integer(env.RUST_POC_TCP_PORT ?? settings.tcp.port, 'TCP port', 1, 65535);
-    const tcp = `[[interfaces]]\ntype = "TCPClientInterface"\nenabled = true\nname = "yara-tcp"\ntarget_host = ${JSON.stringify(host)}\ntarget_port = ${port}`;
+    const tcp = `[[interfaces]]\ntype = "BackboneClientInterface"\nenabled = true\nname = "R3AKT Server"\ntarget_host = ${JSON.stringify(host)}\ntarget_port = ${port}`;
     const interfaces = [];
     if (mode === 'tcp' || mode === 'bridge') interfaces.push(tcp);
     if (mode === 'rnode' || mode === 'bridge') {
@@ -183,8 +184,14 @@ function prepareLaunch(options = {}) {
     const repoRoot = options.repoRoot || path.resolve(__dirname, '..');
     const packaged = options.packaged || false;
     const homeDir = options.homeDir || os.homedir();
-    const stateDir = env.RUST_POC_STATE_DIR || options.stateDir ||
+    const profileRoot = env.RUST_POC_STATE_DIR || options.stateDir ||
         (packaged ? path.join(homeDir, '.yara') : path.join(repoRoot, 'storage', 'rust-poc'));
+    const activeProfile = readProfiles(profileRoot).active;
+    const stateDir = profileDir(profileRoot, activeProfile);
+    if ((activeProfile !== 'default' || fs.existsSync(path.join(stateDir, 'reticulum.db'))) &&
+        !fs.existsSync(path.join(stateDir, 'identity'))) {
+        throw new Error('The selected YARA profile has no identity. Restore its original identity before starting.');
+    }
     const bind = env.RUST_POC_BIND || '127.0.0.1:9337';
     const match = /^127\.0\.0\.1:([0-9]+)$/.exec(bind);
     if (!match || Number(match[1]) < 1 || Number(match[1]) > 65535) {
@@ -230,13 +237,13 @@ function prepareLaunch(options = {}) {
         '--db', path.join(stateDir, 'reticulum.db'),
         '--identity', path.join(stateDir, 'identity'),
         '--config', config,
-        ...(platform === 'win32' ? ['--rpc', '127.0.0.1:0'] : ['--rpc-unix', path.join(stateDir, 'rpc.sock')]),
+        ...(platform === 'win32' ? ['--rpc', '127.0.0.1:0'] : ['--rpc-unix', path.join(profileRoot, 'rpc.sock')]),
         ...(firstLaunch && mode === 'rnode' ? ['--strict-interface-startup'] : []),
         '--meshchat-bind', bind,
         '--meshchat-assets', assets,
     ];
     return { binary, args, bind, config, mode: firstLaunch ? mode : 'managed', settingsFile, stateDir, importer,
-        migration: { stateDir, homeDir, repoRoot, packaged, platform, env,
+        migration: { stateDir, profileRoot, homeDir, repoRoot, packaged, platform, env,
             executablePath: options.executablePath || process.execPath, desktopDir: options.desktopDir } };
 }
 

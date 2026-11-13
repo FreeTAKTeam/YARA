@@ -1,12 +1,13 @@
 # Using YARA
 
 YARA is a superfast, lightweight Reticulum chat client built on the LXMF-rs daemon.
-The current release is **v1.0.0-beta.2**. It bundles the frontend and
+The current release is **v1.0.0-beta.3**. It bundles the frontend and
 LXMF-rs at commit `1e0e7ef1d6a4e7a5e5832bee1e139a1e15673f45`
 (v0.16.0 plus the interface-discovery and display-name API from
 [LXMF-rs #713](https://github.com/FreeTAKTeam/LXMF-rs/pull/713)). The daemon and
-frontend communicate locally through the MeshChat-compatible API. Beta 2 also
-applies the bundled history-import patch to this pinned backend.
+frontend communicate locally through the MeshChat-compatible API. The release
+applies the bundled history-import and Backbone Client patches to this pinned
+backend.
 
 ## Install and start
 
@@ -32,7 +33,8 @@ available to remote browsers.
 
 ## Connect and send a message
 
-A new profile starts with a TCP client to `rmap.world:4242`. Open **Interfaces**
+A new profile starts with a Backbone Client to the R3AKT server at
+`134.122.46.48:37428`. Open **Interfaces**
 and check its status; the server can be unavailable and a saved interface is
 not proof of a live connection. To use another network, choose **Add Interface**,
 enter its settings, save it, and restart with **Restart Now** or close and reopen
@@ -92,11 +94,20 @@ interface, which takes effect after a restart.
 
 ## Profile and configuration
 
-The packaged app stores its profile in `~/.yara/` (on Windows,
-`%USERPROFILE%\.yara\`). This includes `managed-config.toml`, the identity,
-and the message database. Back up the profile before moving or replacing it;
-the identity determines your address. It is separate from Python MeshChat
-storage. A new YARA profile can copy a MeshChat identity as described below.
+The packaged app stores its original profile in `~/.yara/` (on Windows,
+`%USERPROFILE%\.yara\`); additional profiles are in its `profiles/` directory.
+Each has its own identity, message database, display name and network settings.
+The identity determines your address. Back up the entire YARA directory before
+moving or restoring profiles; it is separate from Python MeshChat storage.
+
+Under **My identity → Edit identity → Manage identities**, choose an existing
+profile, import a 64-byte Reticulum private identity file, or select a MeshChat
+storage folder. Close and reopen YARA to use the selected profile. Importing a
+different identity can create a separate profile or replace the selected profile
+after a second warning. Replacement keeps the previous profile as a selectable
+backup. Existing YARA messages and settings stay with their original identity;
+they are not copied into a newly imported profile. Identity files are private
+keys: keep them secret and back them up securely.
 
 The managed config is created once. Later starts preserve saved interface and
 transport changes. If an older `generated-config.toml` exists without a managed
@@ -135,10 +146,11 @@ and embedded image/audio/file fields are preserved. Imported history is never
 queued for retransmission. Existing YARA messages with the same hash are kept.
 
 If Beta 1 already copied your identity but omitted messages, the next launch
-can offer the matching MeshChat profile's history. YARA never replaces an
-existing different identity. A profile with a database and a missing identity
-requires restoration of its original key. Contacts, display names and network
-interfaces are not imported; configure those in YARA.
+can offer the matching MeshChat profile's history. A different identity is offered
+as a separate profile or, after explicit warnings, as a replacement with a
+recoverable backup. A profile with a database and a missing identity requires
+restoration of its original key. Contacts, display names and network interfaces
+are not imported; configure those in YARA.
 
 Set `YARA_MESHCHAT_IDENTITY` to a full identity-file path for an explicit source
 or to retry an offer previously skipped. Its message database must be under the

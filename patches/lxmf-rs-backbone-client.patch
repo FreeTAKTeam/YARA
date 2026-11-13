@@ -1,0 +1,98 @@
+diff --git a/crates/libs/meshchat-api/src/interface_control/store.rs b/crates/libs/meshchat-api/src/interface_control/store.rs
+index bd5beb821..3e15da3b8 100644
+--- a/crates/libs/meshchat-api/src/interface_control/store.rs
++++ b/crates/libs/meshchat-api/src/interface_control/store.rs
+@@ -189,6 +189,7 @@ fn interface_json(value: &toml::Value) -> Result<Value, ApiError> {
+         let meshchat_kind = match kind {
+             "auto" => "AutoInterface",
+             "tcp_client" => "TCPClientInterface",
++            "backbone_client" => "BackboneClientInterface",
+             "tcp_server" => "TCPServerInterface",
+             "udp" => "UDPInterface",
+             "serial" => "SerialInterface",
+diff --git a/crates/libs/meshchat-api/src/interface_control/write.rs b/crates/libs/meshchat-api/src/interface_control/write.rs
+index 86d5b27f2..f4b2e4a1a 100644
+--- a/crates/libs/meshchat-api/src/interface_control/write.rs
++++ b/crates/libs/meshchat-api/src/interface_control/write.rs
+@@ -18,6 +18,7 @@ pub(super) fn save_interface(
+     const SUPPORTED: &[&str] = &[
+         "AutoInterface",
+         "TCPClientInterface",
++        "BackboneClientInterface",
+         "TCPServerInterface",
+         "UDPInterface",
+         "RNodeInterface",
+@@ -75,7 +76,9 @@ pub(super) fn save_interface(
+ 
+ fn validate_required(kind: &str, body: &Value) -> Result<(), ApiError> {
+     let keys: &[(&str, &str)] = match kind {
+-        "TCPClientInterface" => &[("target_host", "Target Host"), ("target_port", "Target Port")],
++        "TCPClientInterface" | "BackboneClientInterface" => {
++            &[("target_host", "Target Host"), ("target_port", "Target Port")]
++        }
+         "TCPServerInterface" => &[("listen_ip", "Listen IP"), ("listen_port", "Listen Port")],
+         "UDPInterface" => &[
+             ("listen_ip", "Listen IP"),
+@@ -132,6 +135,15 @@ fn editable_fields(kind: &str) -> &'static [&'static str] {
+             "passphrase",
+             "ifac_size",
+         ],
++        "BackboneClientInterface" => &[
++            "target_host",
++            "target_port",
++            "bitrate",
++            "mode",
++            "network_name",
++            "passphrase",
++            "ifac_size",
++        ],
+         "TCPServerInterface" => &[
+             "listen_ip",
+             "listen_port",
+diff --git a/crates/libs/meshchat-api/src/tests/interface_config_api.rs b/crates/libs/meshchat-api/src/tests/interface_config_api.rs
+index db82d46e7..79cc36c5f 100644
+--- a/crates/libs/meshchat-api/src/tests/interface_config_api.rs
++++ b/crates/libs/meshchat-api/src/tests/interface_config_api.rs
+@@ -248,3 +248,42 @@ async fn display_name_patch_reaches_daemon_and_rejects_empty_names() {
+         call(app, "PATCH", "/api/v1/config", Some(json!({"config":{"display_name":"  "}}))).await;
+     assert_eq!(status, StatusCode::BAD_REQUEST);
+ }
++
++#[tokio::test]
++async fn backbone_client_interfaces_can_be_added_and_edited() {
++    let temp = tempfile::tempdir().expect("temp directory");
++    let path = temp.path().join("daemon.toml");
++    std::fs::write(&path, "[[interfaces]]\nname = \"short\"\ntype = \"backbone_client\"\nenabled = true\ntarget_host = \"127.0.0.1\"\ntarget_port = 4242\n").expect("fixture");
++    let app = config_router(path.clone());
++    let (status, listed) = call(app.clone(), "GET", "/api/v1/reticulum/interfaces", None).await;
++    assert_eq!(status, StatusCode::OK);
++    assert_eq!(listed["interfaces"]["short"]["type"], "BackboneClientInterface");
++
++    let (status, _) = call(app.clone(), "POST", "/api/v1/reticulum/interfaces/add", Some(json!({
++        "name":"backbone", "type":"BackboneClientInterface", "target_host":"127.0.0.1", "target_port":"37428"
++    }))).await;
++    assert_eq!(status, StatusCode::OK);
++    let (status, _) = call(app.clone(), "POST", "/api/v1/reticulum/interfaces/add", Some(json!({
++        "name":"backbone", "type":"BackboneClientInterface", "target_host":"10.0.0.2", "target_port":"4242",
++        "allow_overwriting_interface": true
++    }))).await;
++    assert_eq!(status, StatusCode::OK);
++    let parsed: toml::Value =
++        toml::from_str(&std::fs::read_to_string(&path).expect("saved config")).expect("valid TOML");
++    let saved = &parsed["interfaces"][1];
++    assert_eq!(saved["type"].as_str(), Some("BackboneClientInterface"));
++    assert_eq!(saved["target_host"].as_str(), Some("10.0.0.2"));
++    assert_eq!(saved["target_port"].as_integer(), Some(4242));
++
++    let (status, body) = call(
++        app,
++        "POST",
++        "/api/v1/reticulum/interfaces/add",
++        Some(json!({
++            "name":"missing", "type":"BackboneClientInterface", "target_port":"4242"
++        })),
++    )
++    .await;
++    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
++    assert_eq!(body["message"], "Target Host is required");
++}

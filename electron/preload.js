@@ -34,6 +34,10 @@ contextBridge.exposeInMainWorld('electron', {
         return await ipcRenderer.invoke('relaunch');
     },
 
+    manageIdentities: async function() {
+        return await ipcRenderer.invoke('manage-identities');
+    },
+
     // allow showing a file path in os file manager
     showPathInFolder: async function(path) {
         return await ipcRenderer.invoke('showPathInFolder', path);

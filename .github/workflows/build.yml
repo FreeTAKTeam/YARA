@@ -54,7 +54,9 @@ jobs:
           path: lxmf-rs
       - name: Apply MeshChat profile migration
         working-directory: lxmf-rs
-        run: git apply ../patches/lxmf-rs-meshchat-import.patch
+        run: |
+          git apply ../patches/lxmf-rs-meshchat-import.patch
+          git apply ../patches/lxmf-rs-backbone-client.patch
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
@@ -77,6 +79,7 @@ jobs:
           set -euo pipefail
           cargo test --locked -p reticulum-rs-rpc meshchat_import --lib
           cargo test --locked -p meshchat-api imported_meshchat_history --lib
+          cargo test --locked -p meshchat-api backbone_client_interfaces --lib
           cargo test --locked -p reticulumd --lib meshchat_
       - name: Stage native binaries and their license
         shell: bash

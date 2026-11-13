@@ -6,11 +6,15 @@ const net = require('node:net');
 const path = require('node:path');
 const { prepareLaunch } = require('./rust-poc-launcher');
 const { offerMeshchatImport } = require('./meshchat-import');
+const { manageIdentities } = require('./identity-manager');
+const { readProfiles, profileDir } = require('./identity-profiles');
 
 // remember main window
 var mainWindow = null;
 var quitting = false;
+var backendStopping = false;
 var rustPlan = null;
+var identityManagerOpen = false;
 
 // remember child process for exe so we can kill it when app exits
 var exeChildProcess = null;
@@ -18,6 +22,17 @@ const rustPoc = app.isPackaged || process.env.MESHCHAT_RUST_POC === '1';
 const serverUrl = `http://${rustPoc ? (process.env.RUST_POC_BIND || '127.0.0.1:9337') : '127.0.0.1:9337'}`;
 
 ipcMain.handle('server-url', () => serverUrl);
+ipcMain.handle('manage-identities', async(event) => {
+    if (!rustPoc || !rustPlan || quitting || identityManagerOpen || event.sender !== mainWindow?.webContents) return;
+    identityManagerOpen = true;
+    try {
+        await manageIdentities({ migration: rustPlan.migration, importer: rustPlan.importer, dialog });
+    } catch (error) {
+        dialog.showErrorBox('Identity management failed', error.message);
+    } finally {
+        identityManagerOpen = false;
+    }
+});
 function isPortAvailable(bind) {
     const [host, port] = bind.split(':');
     return new Promise((resolve) => {
@@ -86,8 +101,9 @@ ipcMain.handle('prompt', async(event, message) => {
 
 // allow relaunching app via ipc
 ipcMain.handle('relaunch', () => {
+    if(quitting) return;
     app.relaunch();
-    app.exit();
+    app.quit();
 });
 
 // allow showing a file path in os file manager
@@ -165,12 +181,23 @@ app.whenReady().then(async () => {
                 app.quit();
                 return;
             }
+            if (rustPlan.migration?.profileRoot && profileDir(rustPlan.migration.profileRoot,
+                readProfiles(rustPlan.migration.profileRoot).active) !== rustPlan.stateDir) {
+                rustPlan = prepareLaunch({
+                    packaged: app.isPackaged,
+                    resourcesPath: process.resourcesPath,
+                    executablePath: app.getPath('exe'),
+                    desktopDir: app.getPath('desktop'),
+                });
+            }
         } catch(error) {
             dialog.showErrorBox('YARA startup failed', error.message);
             app.quit();
             return;
         }
     }
+
+    if(quitting) return;
 
     if(!shouldLaunchHeadless){
 
@@ -236,6 +263,8 @@ app.whenReady().then(async () => {
         }
 
     }
+
+    if(quitting) return;
 
     try {
         if(rustPoc){
@@ -345,12 +374,22 @@ app.whenReady().then(async () => {
 
 });
 
-app.on('before-quit', () => {
+app.on('before-quit', (event) => {
     quitting = true;
-    if(exeChildProcess){
-        exeChildProcess.kill(rustPoc ? "SIGTERM" : "SIGKILL");
+    const child = exeChildProcess;
+    if(!child?.pid || child.exitCode !== null || child.signalCode !== null) return;
+
+    // Keep Electron alive until the daemon releases its database and listening sockets.
+    event.preventDefault();
+    if(backendStopping) return;
+    backendStopping = true;
+    const timeout = setTimeout(() => child.kill('SIGKILL'), 5000);
+    child.once('exit', () => {
+        clearTimeout(timeout);
         exeChildProcess = null;
-    }
+        app.quit();
+    });
+    child.kill(rustPoc ? 'SIGTERM' : 'SIGKILL');
 });
 
 app.on('window-all-closed', () => {

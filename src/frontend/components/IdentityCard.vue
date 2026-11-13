@@ -46,6 +46,7 @@
                 <div class="font-mono text-xs text-rem-muted break-all">{{ config.identity_hash }}</div>
                 <div class="rem-label">LXMF address</div>
                 <div class="font-mono text-xs text-rem-muted break-all">{{ config.lxmf_address_hash }}</div>
+                <button v-if="rustPoc && canManageIdentities" @click="manageIdentities" type="button" class="rem-btn self-start">Manage identities</button>
             </div>
         </details>
     </div>
@@ -138,10 +139,16 @@ export default {
         formatSecondsAgo: function(seconds) {
             return Utils.formatSecondsAgo(seconds);
         },
+        async manageIdentities() {
+            await window.electron.manageIdentities();
+        },
     },
     computed: {
         rustPoc() {
             return GlobalState.rustPoc;
+        },
+        canManageIdentities() {
+            return typeof window.electron?.manageIdentities === 'function';
         },
     },
 }

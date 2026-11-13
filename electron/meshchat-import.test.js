@@ -5,6 +5,7 @@ const path = require('node:path');
 const { test } = require('node:test');
 const { discoverMeshchat, offerMeshchatImport } = require('./meshchat-import');
 const { importMeshchatIdentity } = require('./meshchat-identity');
+const { readProfiles, profileDir, selectProfile } = require('./identity-profiles');
 
 function fixture(t) {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'yara-profile-'));
@@ -92,15 +93,78 @@ test('Beta 1 matching identity can import missing history without replacing nati
     assert.equal(fs.readFileSync(database, 'utf8'), 'existing native history');
 });
 
-test('a foreign identity is never offered or overwritten', async (t) => {
+test('a different identity can be used separately without overwriting the current profile', async (t) => {
     const { options, source, identity, calls } = fixture(t);
     const original = Buffer.alloc(64, 9);
     fs.writeFileSync(identity, original);
     options.env.YARA_MESHCHAT_IDENTITY = source;
-    options.dialog = { showMessageBox() { assert.fail('foreign identity offered'); } };
-    await assert.rejects(offerMeshchatImport(options), /does not match/);
+    let prompts = 0;
+    options.dialog = { async showMessageBox(box) {
+        if (box.type === 'info') return { response: 0 };
+        prompts++;
+        if (box.type === 'warning') {
+            assert.equal(box.defaultId, 0);
+            return { response: 1 };
+        }
+        return { response: 0 };
+    } };
+    await offerMeshchatImport(options);
+    const profiles = readProfiles(options.stateDir);
+    assert.equal(prompts, 2);
+    assert.notEqual(profiles.active, 'default');
+    assert.deepEqual(fs.readFileSync(path.join(profileDir(options.stateDir, profiles.active), 'identity')), fs.readFileSync(source));
     assert.deepEqual(fs.readFileSync(identity), original);
-    assert.equal(calls.some(args => args.includes('--db')), false);
+    assert.equal(calls.some(args => args.includes('--db')), true);
+    selectProfile(options.stateDir, 'default');
+    assert.equal(readProfiles(options.stateDir).active, 'default');
+});
+
+test('replacement requires a second non-default warning and retains the original as a backup', async (t) => {
+    const { options, source, identity } = fixture(t);
+    fs.writeFileSync(identity, Buffer.alloc(64, 9));
+    fs.writeFileSync(path.join(options.stateDir, 'reticulum.db'), 'original messages');
+    options.env.YARA_MESHCHAT_IDENTITY = source;
+    let step = 0;
+    options.dialog = { async showMessageBox(box) {
+        if (box.type === 'info') return { response: 0 };
+        step++;
+        if (step === 1) return { response: 0 };
+        assert.equal(box.defaultId, 0);
+        return { response: step === 2 ? 2 : 1 };
+    } };
+    await offerMeshchatImport(options);
+    const profiles = readProfiles(options.stateDir);
+    assert.equal(step, 3);
+    assert.equal(profiles.profiles.find(p => p.id === 'default').backup, true);
+    assert.deepEqual(fs.readFileSync(identity), Buffer.alloc(64, 9));
+    assert.equal(fs.readFileSync(path.join(options.stateDir, 'reticulum.db'), 'utf8'), 'original messages');
+    assert.deepEqual(fs.readFileSync(path.join(profileDir(options.stateDir, profiles.active), 'identity')), fs.readFileSync(source));
+});
+
+test('cancelling replacement or failing import leaves the selected profile unchanged', async (t) => {
+    const { options, source, identity } = fixture(t);
+    fs.writeFileSync(identity, Buffer.alloc(64, 9));
+    options.env.YARA_MESHCHAT_IDENTITY = source;
+    let step = 0;
+    options.dialog = { showMessageBox: async () => ({ response: ++step === 1 ? 0 : step === 2 ? 2 : 0 }) };
+    assert.equal(await offerMeshchatImport(options), false);
+    assert.equal(readProfiles(options.stateDir).active, 'default');
+    step = 0;
+    options.dialog = { showMessageBox: async () => ({ response: ++step === 1 ? 0 : 1 }) };
+    const run = options.run;
+    options.run = (binary, args) => args.includes('--db') ? Promise.reject(new Error('import failed')) : run(binary, args);
+    await assert.rejects(offerMeshchatImport(options), /import failed/);
+    assert.equal(readProfiles(options.stateDir).active, 'default');
+    assert.deepEqual(fs.readFileSync(identity), Buffer.alloc(64, 9));
+    assert.deepEqual(fs.readdirSync(path.join(options.stateDir, 'profiles')), []);
+});
+
+test('headless import does not replace a different identity without consent', async (t) => {
+    const { options, source, identity } = fixture(t);
+    fs.writeFileSync(identity, Buffer.alloc(64, 9));
+    options.env.YARA_MESHCHAT_IDENTITY = source;
+    await assert.rejects(offerMeshchatImport({ ...options, headless: true }), /interactive confirmation/);
+    assert.deepEqual(fs.readFileSync(identity), Buffer.alloc(64, 9));
 });
 
 test('folder picker confirms the chosen profile before writes', async (t) => {
@@ -213,4 +277,13 @@ test('explicit opt-out does not inspect sources, prompt or write a marker', asyn
     assert.equal(await offerMeshchatImport(options), true);
     assert.equal(fs.existsSync(identity), false);
     assert.equal(fs.existsSync(marker), false);
+});
+
+test('skipping a manual import leaves the existing migration marker untouched', async (t) => {
+    const { options, source, marker } = fixture(t);
+    fs.writeFileSync(marker, '{"status":"imported"}\n');
+    options.env.YARA_MESHCHAT_IDENTITY = source;
+    options.dialog = { showMessageBox: async () => ({ response: 2 }) };
+    assert.equal(await offerMeshchatImport({ ...options, manual: true }), false);
+    assert.equal(fs.readFileSync(marker, 'utf8'), '{"status":"imported"}\n');
 });

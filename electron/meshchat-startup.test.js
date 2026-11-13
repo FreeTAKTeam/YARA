@@ -66,3 +66,79 @@ for (const headless of [false, true]) {
         });
     }
 }
+
+test('startup launches the profile selected by the import offer', async () => {
+    let start;
+    let prepared = 0;
+    let selected = false;
+    let spawned;
+    const electron = {
+        app: { isPackaged: true, getPath: name => `/test/${name}`, whenReady: () => ({ then: callback => { start = callback; } }), on() {}, quit() {} },
+        ipcMain: { handle() {} },
+    };
+    vm.runInNewContext(fs.readFileSync(path.join(__dirname, 'main.js'), 'utf8'), {
+        require: name => {
+            if (name === 'electron') return electron;
+            if (name === 'electron-prompt') return () => {};
+            if (name === './identity-manager') return {};
+            if (name === './identity-profiles') return {
+                readProfiles: () => ({ active: selected ? 'new' : 'default' }),
+                profileDir: (root, id) => id === 'new' ? '/test/new' : '/test/state',
+            };
+            if (name === './rust-poc-launcher') return { prepareLaunch: () => {
+                prepared++;
+                const stateDir = selected ? '/test/new' : '/test/state';
+                return { bind: '127.0.0.1:9337', binary: 'reticulumd', args: ['--identity', stateDir + '/identity'],
+                    stateDir, importer: 'meshchat-import', migration: { stateDir, profileRoot: '/test/state' } };
+            } };
+            if (name === './meshchat-import') return { offerMeshchatImport: async () => { selected = true; return true; } };
+            if (name === 'node:net') return { createServer: () => ({ once() {}, listen(port, host, cb) { cb(); }, close(cb) { cb(); } }) };
+            if (name === 'child_process') return { spawn: (binary, args) => {
+                spawned = args; const stream = { setEncoding() {}, on() {} };
+                return { stdout: stream, stderr: stream, on() {} };
+            } };
+            return require(name);
+        },
+        __dirname,
+        process: { platform: 'linux', env: {}, argv: ['yara', '--headless'], on() {} },
+    });
+    await start();
+    assert.equal(prepared, 2);
+    assert.equal(spawned[1], '/test/new/identity');
+});
+
+test('identity manager IPC only accepts the app window and prevents concurrent dialogs', async () => {
+    let start;
+    let manage;
+    let finish;
+    let opened = 0;
+    const sender = {};
+    const electron = {
+        app: { isPackaged: true, getPath: () => '/test', whenReady: () => ({ then: callback => { start = callback; } }), on() {}, quit() {} },
+        ipcMain: { handle: (name, fn) => { if (name === 'manage-identities') manage = fn; } },
+        BrowserWindow: class { webContents = Object.assign(sender, { setWindowOpenHandler() {} }); async loadFile() {} },
+    };
+    vm.runInNewContext(fs.readFileSync(path.join(__dirname, 'main.js'), 'utf8'), {
+        require: name => {
+            if (name === 'electron') return electron;
+            if (name === 'electron-prompt') return () => {};
+            if (name === './identity-manager') return { manageIdentities: () => { opened++; return new Promise(resolve => { finish = resolve; }); } };
+            if (name === './rust-poc-launcher') return { prepareLaunch: () => ({ bind: '127.0.0.1:9337', binary: 'reticulumd', args: [], importer: 'meshchat-import', migration: {} }) };
+            if (name === './meshchat-import') return { offerMeshchatImport: async () => true };
+            if (name === 'node:net') return { createServer: () => ({ once() {}, listen(port, host, cb) { cb(); }, close(cb) { cb(); } }) };
+            if (name === 'child_process') return { spawn: () => {
+                const stream = { setEncoding() {}, on() {} }; return { stdout: stream, stderr: stream, on() {} };
+            } };
+            return require(name);
+        },
+        __dirname, process: { platform: 'linux', env: {}, argv: ['yara'], on() {} },
+    });
+    await start();
+    await manage({ sender: {} });
+    assert.equal(opened, 0);
+    const first = manage({ sender });
+    await manage({ sender });
+    assert.equal(opened, 1);
+    finish();
+    await first;
+});

@@ -19,29 +19,14 @@
                 </div>
                 <div class="divide-y divide-gray-200 dark:text-white">
 
-                    <div class="flex px-2 py-1">
+                    <div v-for="server of communityInterfaces" :key="server.name" class="flex px-2 py-1">
                         <div class="my-auto mr-auto">
-                            <div>RNS Testnet Amsterdam</div>
-                            <div class="text-xs">amsterdam.connect.reticulum.network:4965</div>
+                            <div>{{ server.name }}</div>
+                            <div class="text-xs">{{ server.host }}:{{ server.port }}</div>
                         </div>
                         <div class="ml-2 my-auto">
                             <button
-                                @click="newInterfaceName='RNS Testnet Amsterdam';newInterfaceType='TCPClientInterface';newInterfaceTargetHost='amsterdam.connect.reticulum.network';newInterfaceTargetPort='4965'"
-                                type="button"
-                                class="inline-flex items-center gap-x-1 rounded-md bg-gray-500 px-2 py-1 text-sm font-semibold text-white shadow-sm hover:bg-gray-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-500">
-                                <span>Use Interface</span>
-                            </button>
-                        </div>
-                    </div>
-
-                    <div class="flex px-2 py-1">
-                        <div class="my-auto mr-auto">
-                            <div>RNS Testnet BetweenTheBorders</div>
-                            <div class="text-xs">reticulum.betweentheborders.com:4242</div>
-                        </div>
-                        <div class="ml-2 my-auto">
-                            <button
-                                @click="newInterfaceName='RNS Testnet BetweenTheBorders';newInterfaceType='TCPClientInterface';newInterfaceTargetHost='reticulum.betweentheborders.com';newInterfaceTargetPort='4242'"
+                                @click="newInterfaceName=server.name;newInterfaceType='TCPClientInterface';newInterfaceTargetHost=server.host;newInterfaceTargetPort=String(server.port)"
                                 type="button"
                                 class="inline-flex items-center gap-x-1 rounded-md bg-gray-500 px-2 py-1 text-sm font-semibold text-white shadow-sm hover:bg-gray-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-500">
                                 <span>Use Interface</span>
@@ -82,6 +67,7 @@
                             <option value="RNodeMultiInterface">RNode Multi Interface</option>
                             <option disabled selected>IP Networks</option>
                             <option value="TCPClientInterface">TCP Client Interface</option>
+                            <option value="BackboneClientInterface">Backbone Client Interface</option>
                             <option value="TCPServerInterface">TCP Server Interface</option>
                             <option value="UDPInterface">UDP Interface</option>
                             <option value="I2PInterface">I2P Interface</option>
@@ -99,13 +85,13 @@
 
                     <!-- TCPClientInterface -->
                     <!-- interface target host -->
-                    <div v-if="newInterfaceType === 'TCPClientInterface'" class="mb-2">
+                    <div v-if="['TCPClientInterface', 'BackboneClientInterface'].includes(newInterfaceType)" class="mb-2">
                         <FormLabel class="mb-1">Target Host</FormLabel>
                         <input type="text" placeholder="e.g: example.com" v-model="newInterfaceTargetHost" class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5 dark:bg-zinc-900 dark:border-zinc-600 dark:text-white dark:focus:ring-blue-600 dark:focus:border-blue-600">
                     </div>
 
                     <!-- interface target port -->
-                    <div v-if="newInterfaceType === 'TCPClientInterface'" class="mb-2">
+                    <div v-if="['TCPClientInterface', 'BackboneClientInterface'].includes(newInterfaceType)" class="mb-2">
                         <FormLabel class="mb-1">Target Port</FormLabel>
                         <input type="text" placeholder="e.g: 1234" v-model="newInterfaceTargetPort" class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5 dark:bg-zinc-900 dark:border-zinc-600 dark:text-white dark:focus:ring-blue-600 dark:focus:border-blue-600">
                     </div>
@@ -809,6 +795,33 @@ import FormLabel from "../forms/FormLabel.vue";
 import FormSubLabel from "../forms/FormSubLabel.vue";
 import RNodePresetSelect from "./RNodePresetSelect.vue";
 
+// Same list and order as REM (apps/mobile/src/utils/tcpCommunityServers.ts); keep them in sync.
+const COMMUNITY_INTERFACES = [
+    { name: "R3AKT Server", host: "134.122.46.48", port: 37428 },
+    { name: "rmap", host: "rmap.world", port: 4242 },
+    { name: "Beleth RNS Hub", host: "rns.beleth.net", port: 4242 },
+    { name: "Quad4 TCP Node 1", host: "rns.quad4.io", port: 4242 },
+    { name: "FireZen", host: "firezen.com", port: 4242 },
+    { name: "g00n.cloud Hub", host: "dfw.us.g00n.cloud", port: 6969 },
+    { name: "interloper node", host: "intr.cx", port: 4242 },
+    { name: "interloper node (Tor)", host: "intrcxv4fa72e5ovler5dpfwsiyuo34tkcwfy5snzstxkhec75okowqd.onion", port: 4242 },
+    { name: "Jon's Node", host: "rns.jlamothe.net", port: 4242 },
+    { name: "noDNS1", host: "202.61.243.41", port: 4965 },
+    { name: "noDNS2", host: "193.26.158.230", port: 4965 },
+    { name: "NomadNode SEAsia TCP", host: "rns.jaykayenn.net", port: 4242 },
+    { name: "0rbit-Net", host: "93.95.227.8", port: 49952 },
+    { name: "Quad4 TCP Node 2", host: "rns2.quad4.io", port: 4242 },
+    { name: "Quortal TCP Node", host: "reticulum.qortal.link", port: 4242 },
+    { name: "R-Net TCP", host: "istanbul.reserve.network", port: 9034 },
+    { name: "RNS bnZ-NODE01", host: "node01.rns.bnz.se", port: 4242 },
+    { name: "RNS COMSEC-RD", host: "80.78.23.249", port: 4242 },
+    { name: "RNS HAM RADIO", host: "135.125.238.229", port: 4242 },
+    { name: "RNS Testnet StoppedCold", host: "rns.stoppedcold.com", port: 4242 },
+    { name: "RNS_Transport_US-East", host: "45.77.109.86", port: 4965 },
+    { name: "SparkN0de", host: "aspark.uber.space", port: 44860 },
+    { name: "Tidudanka.com", host: "reticulum.tidudanka.com", port: 37500 },
+];
+
 export default {
     name: 'AddInterfacePage',
     components: {
@@ -819,6 +832,7 @@ export default {
     },
     data() {
         return {
+            communityInterfaces: COMMUNITY_INTERFACES,
 
             isEditingInterface: false,
 

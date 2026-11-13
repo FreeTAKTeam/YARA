@@ -3,6 +3,7 @@ const path = require('node:path');
 const { execFile } = require('node:child_process');
 const { promisify } = require('node:util');
 const { importMeshchatIdentity } = require('./meshchat-identity');
+const { readProfiles, createProfile, activateNewProfile } = require('./identity-profiles');
 
 const execute = promisify(execFile);
 
@@ -44,6 +45,7 @@ async function runImporter(binary, args) {
 
 async function offerMeshchatImport(options) {
     const { stateDir, importer, dialog, headless, env, run = runImporter } = options;
+    const profileRoot = options.profileRoot || stateDir;
     if (env.YARA_IMPORT_MESHCHAT === '0') return true;
     const explicit = env.YARA_MESHCHAT_IDENTITY;
     const marker = path.join(stateDir, 'meshchat-import.json');
@@ -62,7 +64,6 @@ async function offerMeshchatImport(options) {
     const existing = fs.existsSync(targetIdentity) ? fs.readFileSync(targetIdentity) : null;
     for (const source of sources) {
         const key = fs.readFileSync(source);
-        if (existing && !key.equals(existing)) continue;
         const summary = await run(importer, ['--source-identity', source]);
         if (!fs.readFileSync(source).equals(key)) throw new Error('The MeshChat identity changed during discovery. Close MeshChat and try again.');
         // A Reticulum transport key is not a MeshChat profile without its chat database.
@@ -70,19 +71,18 @@ async function offerMeshchatImport(options) {
         if (!explicit && protocolFolder && summary.database_path === null) continue;
         candidates.push({ source, summary, key });
     }
-    if (explicit && candidates.length === 0) throw new Error('The selected MeshChat identity does not match this YARA profile.');
-
     let selected = headless ? candidates[0] : null;
     if (!headless) {
         const response = await dialog.showMessageBox({
             type: 'question', title: 'Import MeshChat profile',
-            message: existing ? 'Import your missing MeshChat messages?' : 'Bring your MeshChat identity and messages into YARA?',
+            message: existing ? 'Choose an identity or import missing MeshChat messages' : 'Bring your identity and messages into YARA?',
             detail: `${candidates.map(({ source, summary }, index) => `${index + 1}. ${source}\n${summary.message_count} messages${summary.database_path === null ? ' (identity only; no message database found)' : ''}`).join('\n\n') || 'Choose the MeshChat storage folder that contains your identity.'}${configs.length ? `\n\nReticulum network configuration found:\n${configs.join('\n')}\nNetwork settings are not imported.` : ''}\n\nClose MeshChat first. Its files will stay unchanged. Imported history will not be resent.${existing ? '\nYour current YARA identity and messages will be kept.' : ''}`,
             buttons: [...candidates.map((_, index) => `Import profile ${index + 1}`), 'Choose folder…', 'Skip import', 'Cancel'],
             defaultId: candidates.length, cancelId: candidates.length + 2, noLink: true,
         });
         if (response.response === candidates.length + 2) return false;
         if (response.response === candidates.length + 1) {
+            if (options.manual) return false;
             fs.writeFileSync(marker, JSON.stringify({ status: 'declined' }) + '\n', { mode: 0o600 });
             return true;
         }
@@ -100,18 +100,59 @@ async function offerMeshchatImport(options) {
         }
     }
     if (!selected) throw new Error('No MeshChat profile was selected.');
-    importMeshchatIdentity({ stateDir, source: selected.source, expectedKey: selected.key });
-    const summary = await run(importer, ['--source-identity', selected.source,
-        '--identity', targetIdentity, '--db', path.join(stateDir, 'reticulum.db')]);
-    if (summary.identity_hash !== selected.summary.identity_hash || summary.database_path !== selected.summary.database_path) {
-        throw new Error('The MeshChat profile changed during import. Please try again with MeshChat closed.');
+    let targetDir = stateDir;
+    let newProfile;
+    let replace = false;
+    if (existing && (!selected.key.equals(existing) || options.forceNewProfile)) {
+        if (headless) throw new Error('A different identity requires interactive confirmation.');
+        const choice = await dialog.showMessageBox({
+            type: 'warning', title: 'Different identity',
+            message: 'How do you want to use this identity?',
+            detail: 'A separate profile keeps each identity, messages and settings apart. Existing YARA messages are not copied into the new profile. Replacing the current profile makes the imported profile active and keeps the previous profile as a recoverable backup.',
+            buttons: ['Cancel', 'Use as separate profile', 'Replace current profile…'],
+            defaultId: 0, cancelId: 0, noLink: true,
+        });
+        if (choice.response !== 1 && choice.response !== 2) return false;
+        replace = choice.response === 2;
+        if (replace) {
+            const warning = await dialog.showMessageBox({
+                type: 'warning', title: 'Replace current profile?',
+                message: 'Replace the active identity and its profile?',
+                detail: 'Your address, messages and settings will change to the imported profile. The current profile will be kept as a backup and can be selected again. Close MeshChat before importing.',
+                buttons: ['Cancel', 'Replace profile'], defaultId: 0, cancelId: 0, noLink: true,
+            });
+            if (warning.response !== 1) return false;
+        }
+        newProfile = createProfile(profileRoot);
+        targetDir = newProfile.dir;
     }
-    fs.writeFileSync(marker, JSON.stringify({ status: 'imported', source: selected.source,
-        imported: summary.imported, skipped: summary.skipped }) + '\n', { mode: 0o600 });
-    const message = `Your MeshChat identity is ready in YARA. Your LXMF address stays the same.\n${summary.imported} messages imported; ${summary.skipped} already present.${summary.database_path === null ? '\nNo MeshChat message database was found; only the identity was copied.' : ''}\n\nThe original MeshChat files are unchanged.`;
+    let summary;
+    try {
+        const targetKey = path.join(targetDir, 'identity');
+        importMeshchatIdentity({ stateDir: targetDir, source: selected.source, expectedKey: selected.key });
+        summary = await run(importer, ['--source-identity', selected.source,
+            '--identity', targetKey, '--db', path.join(targetDir, 'reticulum.db')]);
+        if (summary.identity_hash !== selected.summary.identity_hash || summary.database_path !== selected.summary.database_path) {
+            throw new Error('The MeshChat profile changed during import. Please try again with MeshChat closed.');
+        }
+        fs.writeFileSync(path.join(targetDir, 'meshchat-import.json'), JSON.stringify({ status: 'imported', source: selected.source,
+            imported: summary.imported, skipped: summary.skipped }) + '\n', { mode: 0o600 });
+        if (newProfile) activateNewProfile(profileRoot, newProfile.id, replace);
+    } catch (error) {
+        if (newProfile) {
+            let published = true;
+            try { published = readProfiles(profileRoot).profiles.some(profile => profile.id === newProfile.id); } catch (_) {}
+            if (!published) {
+                try { fs.rmSync(newProfile.dir, { recursive: true, force: true }); }
+                catch (cleanupError) { throw new Error(`${error.message}; failed to remove incomplete profile: ${cleanupError.message}`); }
+            }
+        }
+        throw error;
+    }
+    const message = `Your identity is ready in YARA. Its LXMF address stays the same.\n${summary.imported} messages imported; ${summary.skipped} already present.${summary.database_path === null ? '\nNo MeshChat message database was found; only the identity was copied.' : ''}\n\nThe source files are unchanged.${newProfile ? '\nClose and reopen YARA if it is already running.' : ''}`;
     if (headless) console.log(message);
     else await dialog.showMessageBox({ type: 'info', title: 'MeshChat import complete', message });
     return true;
 }
 
-module.exports = { discoverMeshchat, offerMeshchatImport };
+module.exports = { discoverMeshchat, offerMeshchatImport, runImporter };

@@ -1,11 +1,13 @@
-YARA v1.0.0-beta.2 fixes custom profile icon saving and adds consent-based MeshChat identity and message-history import.
+YARA v1.0.0-beta.3 connects new profiles to the R3AKT backbone by default, adds Backbone Client interfaces and multiple identities, and fixes the interface actions menu.
 
-- Custom profile icons and colours now save and remove correctly through the Rust config API, survive restart, and report actionable save errors.
-- On Windows, YARA checks beside the original portable executable and on the Desktop for MeshChat storage and `.reticulum/config`. A folder picker supports other locations. Reticulum network configuration is a discovery hint; network settings are not imported.
-- YARA asks before importing, shows the source and message count, and offers Skip or Cancel. If Beta 1 already imported your identity, Beta 2 can merge the missing history when the identities match.
-- History imports retain existing YARA messages, skip duplicate hashes, preserve embedded attachments and historical metadata, and leave MeshChat's source files unchanged. Imported pending messages are labeled as history and are not resent. Close MeshChat before importing.
+- New profiles start with a Backbone Client to the R3AKT server (`134.122.46.48:37428`). Existing profiles keep their saved interfaces.
+- Backbone Client is now an interface type you can add, edit and save. The bundled daemon accepts it through the interface API with the same host and port fields as a TCP client.
+- The Community Interfaces list on **Add Interface** now matches REM's list of public TCP servers.
+- Each interface card's **⋮** menu (Disable, Edit, Export, Delete) is no longer cut off, so existing interfaces can be edited again.
+- **My identity → Edit identity → Manage identities** lets you keep several profiles, each with its own identity, messages, display name and network settings. You can import a Reticulum private identity file or a MeshChat storage folder as a separate profile, or replace the selected profile after a second warning; the previous profile is kept as a selectable backup. Close and reopen YARA to switch profiles.
+- The RNode flasher's instructions now refer to YARA.
 
-The release bundles LXMF-rs commit `1e0e7ef1d6a4e7a5e5832bee1e139a1e15673f45` with YARA's native history-import patch. No Python, Node.js, or separate daemon installation is required. See the [setup and migration guide](https://github.com/FreeTAKTeam/YARA/blob/v1.0.0-beta.2/docs/rust-poc.md).
+The release bundles LXMF-rs commit `1e0e7ef1d6a4e7a5e5832bee1e139a1e15673f45` with YARA's history-import and Backbone Client patches. No Python, Node.js, or separate daemon installation is required. See the [setup and migration guide](https://github.com/FreeTAKTeam/YARA/blob/v1.0.0-beta.3/docs/rust-poc.md).
 
 Downloads:
 
@@ -14,7 +16,7 @@ Downloads:
 - Linux x64: Debian `.deb` (`yara-reticulum`)
 - Raspberry Pi OS 64-bit desktop: Linux ARM64 `.AppImage`
 
-Contacts, display names, read markers and network interfaces are not imported. The migration has automated fixture, API, browser and restart coverage; these checks do not establish migration against every real MeshChat installation.
+The identity manager has automated launcher coverage and an isolated Linux fixture test; its native dialogs have not been exercised on Windows or macOS. Back up your whole YARA directory before importing or replacing identities.
 
 **Known issue:** the daemon may remain running after YARA closes. If a later launch reports that its local port is in use, check for a leftover YARA `reticulumd` process after closing the app.
 
