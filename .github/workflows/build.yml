@@ -57,6 +57,7 @@ jobs:
         run: |
           git apply ../patches/lxmf-rs-meshchat-import.patch
           git apply ../patches/lxmf-rs-backbone-client.patch
+          git apply ../patches/lxmf-rs-peer-names.patch
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
@@ -80,6 +81,7 @@ jobs:
           cargo test --locked -p reticulum-rs-rpc meshchat_import --lib
           cargo test --locked -p meshchat-api imported_meshchat_history --lib
           cargo test --locked -p meshchat-api backbone_client_interfaces --lib
+          cargo test --locked -p meshchat-api peer_display_names --lib
           cargo test --locked -p reticulumd --lib meshchat_
       - name: Stage native binaries and their license
         shell: bash

@@ -5,6 +5,20 @@ const vm = require('node:vm');
 const { EventEmitter } = require('node:events');
 const { test } = require('node:test');
 
+function trayMocks(trays = []) {
+    return {
+        Menu: { buildFromTemplate: (template) => ({ template }) },
+        nativeImage: { createFromPath: () => ({ resize: () => ({}) }) },
+        Tray: class extends EventEmitter {
+            constructor() { super(); this.balloons = []; trays.push(this); }
+            setToolTip() {}
+            setContextMenu(menu) { this.menu = menu; }
+            displayBalloon(options) { this.balloons.push(options); }
+            destroy() { this.destroyed = true; }
+        },
+    };
+}
+
 for (const platform of ['darwin', 'win32', 'linux']) {
     test(`main window title bar configuration on ${platform}`, async () => {
         let start;
@@ -15,12 +29,15 @@ for (const platform of ['darwin', 'win32', 'linux']) {
                 isPackaged: false,
                 getPath: () => '/test',
                 whenReady: () => ({ then: (callback) => { start = callback; } }),
+                requestSingleInstanceLock: () => true,
                 on() {},
             },
             ipcMain: { handle() {} },
+            ...trayMocks(),
             BrowserWindow: class {
                 constructor(value) { options = value; }
                 webContents = { setWindowOpenHandler() {} };
+                on() {}
                 loadFile() { throw loadingPageReached; }
             },
         };
@@ -46,7 +63,8 @@ for (const platform of ['darwin', 'win32', 'linux']) {
     });
 }
 
-function lifecycleHarness({ childState = {}, headless = true, loadFile = async () => {}, importOffer = async () => true } = {}) {
+function lifecycleHarness({ childState = {}, headless = true, loadFile = async () => {}, importOffer = async () => true,
+    platform = 'linux', singleInstance = true } = {}) {
     let start;
     const child = Object.assign(new EventEmitter(), {
         pid: 123,
@@ -60,7 +78,7 @@ function lifecycleHarness({ childState = {}, headless = true, loadFile = async (
     const handlers = new Map();
     const timers = new Map();
     const processMock = Object.assign(new EventEmitter(), {
-        platform: 'linux', env: {}, argv: ['yara', ...(headless ? ['--headless'] : [])],
+        platform, env: {}, argv: ['yara', ...(headless ? ['--headless'] : [])],
     });
     const app = Object.assign(new EventEmitter(), {
         isPackaged: true,
@@ -68,6 +86,7 @@ function lifecycleHarness({ childState = {}, headless = true, loadFile = async (
         exits: 0,
         relaunches: 0,
         whenReady: () => ({ then: (callback) => { start = callback; } }),
+        requestSingleInstanceLock: () => singleInstance,
         relaunch() { this.relaunches++; },
         quit() {
             let prevented = false;
@@ -77,15 +96,25 @@ function lifecycleHarness({ childState = {}, headless = true, loadFile = async (
     });
     let spawns = 0;
     const dialogs = [];
+    const trays = [];
+    const windows = [];
     vm.runInNewContext(fs.readFileSync(path.join(__dirname, 'main.js'), 'utf8'), {
         require: (name) => {
             if (name === 'electron') return {
                 app,
                 ipcMain: { handle: (name, callback) => handlers.set(name, callback) },
                 dialog: { showMessageBox: async (...args) => { dialogs.push(args); } },
-                BrowserWindow: class {
+                ...trayMocks(trays),
+                BrowserWindow: class extends EventEmitter {
+                    constructor() { super(); this.visible = true; this.minimized = false; windows.push(this); }
                     webContents = { setWindowOpenHandler() {} };
                     loadFile = loadFile;
+                    isDestroyed() { return false; }
+                    isMinimized() { return this.minimized; }
+                    restore() { this.minimized = false; }
+                    show() { this.visible = true; }
+                    hide() { this.visible = false; }
+                    focus() {}
                 },
             };
             if (name === 'electron-prompt') return () => {};
@@ -104,7 +133,7 @@ function lifecycleHarness({ childState = {}, headless = true, loadFile = async (
         setTimeout: (callback, delay) => { timers.set(callback, delay); return callback; },
         clearTimeout: (id) => timers.delete(id),
     });
-    return { start: () => start(), child, app, handlers, kills, timers, dialogs, process: processMock,
+    return { start: () => start(), child, app, handlers, kills, timers, dialogs, trays, windows, process: processMock,
         get spawns() { return spawns; } };
 }
 
@@ -173,3 +202,65 @@ test('closing the loading window does not start a backend after quitting', async
     assert.equal(harness.spawns, 0);
     assert.equal(harness.app.exits, 1);
 });
+
+function closeWindow(window) {
+    let prevented = false;
+    window.emit('close', { preventDefault() { prevented = true; } });
+    return prevented;
+}
+
+test('closing the window on Windows keeps YARA and its backend running in the tray', async () => {
+    const harness = lifecycleHarness({ headless: false, platform: 'win32' });
+    await harness.start();
+    const [window] = harness.windows;
+    const [tray] = harness.trays;
+
+    assert.equal(closeWindow(window), true);
+    assert.equal(window.visible, false);
+    assert.deepEqual(harness.kills, []);
+    assert.equal(harness.app.exits, 0);
+    assert.equal(tray.balloons.length, 1);
+
+    // the hint is shown only once per session
+    window.show();
+    closeWindow(window);
+    assert.equal(tray.balloons.length, 1);
+
+    tray.emit('click');
+    assert.equal(window.visible, true);
+
+    // Quit from the tray stops the backend and lets the window close.
+    const quit = tray.menu.template.find((item) => item.label === 'Quit YARA');
+    quit.click();
+    assert.deepEqual(harness.kills, ['SIGTERM']);
+    assert.equal(closeWindow(window), false);
+});
+
+test('a second launch reopens the hidden window instead of starting another backend', async () => {
+    const harness = lifecycleHarness({ headless: false, platform: 'win32' });
+    await harness.start();
+    const [window] = harness.windows;
+    closeWindow(window);
+    window.minimized = true;
+    harness.app.emit('second-instance');
+    assert.equal(window.visible, true);
+    assert.equal(window.minimized, false);
+    assert.equal(harness.spawns, 1);
+});
+
+test('a launch without the single-instance lock exits without starting a backend', async () => {
+    const harness = lifecycleHarness({ headless: false, singleInstance: false });
+    await harness.start();
+    assert.equal(harness.spawns, 0);
+    assert.equal(harness.windows.length, 0);
+    assert.equal(harness.app.exits, 1);
+});
+
+for (const platform of ['linux', 'darwin']) {
+    test(`closing the window on ${platform} still quits without a tray`, async () => {
+        const harness = lifecycleHarness({ headless: false, platform });
+        await harness.start();
+        assert.equal(harness.trays.length, 0);
+        assert.equal(closeWindow(harness.windows[0]), false);
+    });
+}

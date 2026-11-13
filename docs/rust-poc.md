@@ -6,8 +6,8 @@ LXMF-rs at commit `1e0e7ef1d6a4e7a5e5832bee1e139a1e15673f45`
 (v0.16.0 plus the interface-discovery and display-name API from
 [LXMF-rs #713](https://github.com/FreeTAKTeam/LXMF-rs/pull/713)). The daemon and
 frontend communicate locally through the MeshChat-compatible API. The release
-applies the bundled history-import and Backbone Client patches to this pinned
-backend.
+applies the bundled history-import, Backbone Client, and contact-name patches
+to this pinned backend.
 
 ## Install and start
 
@@ -175,6 +175,8 @@ change an existing `../LXMF-rs` checkout:
 git clone https://github.com/FreeTAKTeam/LXMF-rs.git ../LXMF-rs-yara
 git -C ../LXMF-rs-yara checkout 1e0e7ef1d6a4e7a5e5832bee1e139a1e15673f45
 git -C ../LXMF-rs-yara apply "$(pwd)/patches/lxmf-rs-meshchat-import.patch"
+git -C ../LXMF-rs-yara apply "$(pwd)/patches/lxmf-rs-backbone-client.patch"
+git -C ../LXMF-rs-yara apply "$(pwd)/patches/lxmf-rs-peer-names.patch"
 (cd ../LXMF-rs-yara && cargo build --locked -p reticulumd --bin reticulumd --bin meshchat-import)
 npm ci
 npm run build-frontend

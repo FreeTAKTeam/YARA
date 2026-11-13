@@ -1,0 +1,176 @@
+diff --git a/crates/libs/meshchat-api/src/chat.rs b/crates/libs/meshchat-api/src/chat.rs
+index 85664db0..e800fcf8 100644
+--- a/crates/libs/meshchat-api/src/chat.rs
++++ b/crates/libs/meshchat-api/src/chat.rs
+@@ -256,7 +256,16 @@ pub(super) async fn conversations(State(state): State<Arc<AppState>>) -> ApiResu
+         .get("conversations")
+         .and_then(Value::as_array)
+         .ok_or_else(|| ApiError::unavailable("daemon conversation list is malformed"))?;
+-    let local = state.local.read().await;
++    let mut local = state.local.write().await;
++    let mut learned = false;
++    for entry in entries {
++        let destination =
++            entry.get("peer_destination_hex").and_then(Value::as_str).unwrap_or_default();
++        learned |= local.remember_peer_name(
++            destination,
++            entry.get("peer_display_name").and_then(Value::as_str),
++        );
++    }
+     let conversations: Vec<Value> = entries.iter().map(|entry| {
+         let destination = entry.get("peer_destination_hex").and_then(Value::as_str).unwrap_or_default();
+         // The legacy daemon field is named *_ms but is populated from its seconds timestamp.
+@@ -264,13 +273,17 @@ pub(super) async fn conversations(State(state): State<Arc<AppState>>) -> ApiResu
+         let read = local.read_at.get(destination).copied().unwrap_or_default();
+         json!({
+             "destination_hash":destination,
+-            "display_name":entry.get("peer_display_name").and_then(Value::as_str).unwrap_or(destination),
++            // An offline peer's announce can leave the daemon window; keep its last known name.
++            "display_name":local.peer_name(destination).unwrap_or(destination),
+             "custom_display_name":local.display_names.get(destination),
+             "is_unread":entry.get("unread_count").and_then(Value::as_u64).unwrap_or_default()>0 && updated as i64>read,
+             "failed_messages_count":0,"lxmf_user_icon":null,
+             "updated_at":updated.to_string(),
+         })
+     }).collect();
++    let persisted = if learned { state.queue_persist(&local)? } else { None };
++    drop(local);
++    AppState::wait_persist(persisted).await?;
+     Ok(Json(json!({"conversations":conversations})))
+ }
+ 
+diff --git a/crates/libs/meshchat-api/src/control.rs b/crates/libs/meshchat-api/src/control.rs
+index cda20f23..9713a7c7 100644
+--- a/crates/libs/meshchat-api/src/control.rs
++++ b/crates/libs/meshchat-api/src/control.rs
+@@ -256,7 +256,13 @@ pub(super) async fn announces(State(state): State<Arc<AppState>>) -> ApiResult {
+         .get("announces")
+         .and_then(Value::as_array)
+         .ok_or_else(|| ApiError::unavailable("daemon announce list is malformed"))?;
+-    let local = state.local.read().await;
++    let mut local = state.local.write().await;
++    let mut learned = false;
++    // Entries are newest first; apply oldest first so the latest announced name wins.
++    for entry in entries.iter().rev() {
++        let destination = entry.get("peer").and_then(Value::as_str).unwrap_or_default();
++        learned |= local.remember_peer_name(destination, entry.get("name").and_then(Value::as_str));
++    }
+     let mapped: Vec<Value> = entries.iter().enumerate().map(|(index, entry)| {
+         let destination = entry.get("peer").and_then(Value::as_str).unwrap_or_default();
+         let timestamp = entry.get("timestamp").and_then(Value::as_i64).unwrap_or_default().to_string();
+@@ -271,6 +277,9 @@ pub(super) async fn announces(State(state): State<Arc<AppState>>) -> ApiResult {
+             "display_name":entry.get("name"),"custom_display_name":local.display_names.get(destination),
+             "lxmf_user_icon":null,"created_at":first_seen,"updated_at":timestamp})
+     }).collect();
++    let persisted = if learned { state.queue_persist(&local)? } else { None };
++    drop(local);
++    AppState::wait_persist(persisted).await?;
+     Ok(Json(json!({"announces":mapped})))
+ }
+ 
+diff --git a/crates/libs/meshchat-api/src/lib.rs b/crates/libs/meshchat-api/src/lib.rs
+index 514c5bd4..4cb73491 100644
+--- a/crates/libs/meshchat-api/src/lib.rs
++++ b/crates/libs/meshchat-api/src/lib.rs
+@@ -37,6 +37,33 @@ struct LocalState {
+     favourites: HashMap<String, Value>,
+     display_names: HashMap<String, String>,
+     read_at: HashMap<String, i64>,
++    /// Last name each peer announced, kept so contacts stay named while offline.
++    #[serde(default)]
++    peer_names: HashMap<String, String>,
++}
++
++impl LocalState {
++    /// Records a peer's announced name; returns whether the stored state changed.
++    fn remember_peer_name(&mut self, destination: &str, name: Option<&str>) -> bool {
++        let destination = destination.trim().to_ascii_lowercase();
++        let Some(name) = name
++            .map(str::trim)
++            .filter(|name| !name.is_empty() && !name.eq_ignore_ascii_case(&destination))
++        else {
++            return false;
++        };
++        if destination.is_empty()
++            || self.peer_names.get(&destination).map(String::as_str) == Some(name)
++        {
++            return false;
++        }
++        self.peer_names.insert(destination, name.to_owned());
++        true
++    }
++
++    fn peer_name(&self, destination: &str) -> Option<&str> {
++        self.peer_names.get(&destination.trim().to_ascii_lowercase()).map(String::as_str)
++    }
+ }
+ 
+ #[derive(Debug)]
+diff --git a/crates/libs/meshchat-api/src/tests.rs b/crates/libs/meshchat-api/src/tests.rs
+index 4b2dbcea..b21020d3 100644
+--- a/crates/libs/meshchat-api/src/tests.rs
++++ b/crates/libs/meshchat-api/src/tests.rs
+@@ -458,3 +458,43 @@ async fn conversation_history_uses_stable_numeric_cursor_for_older_messages() {
+     assert_eq!(next_page["lxmf_messages"][0]["content"], "first");
+     assert!(next_page["lxmf_messages"][0]["id"].as_i64().expect("row id") < cursor);
+ }
++
++#[tokio::test]
++async fn peer_display_names_survive_the_peer_going_offline() {
++    let daemon = Arc::new(RpcDaemon::test_instance());
++    let destination = "00112233445566778899aabbccddeeff";
++    let app = router(Arc::clone(&daemon), None);
++    let (status, _) = call(
++        app.clone(),
++        "POST",
++        "/api/v1/lxmf-messages/send",
++        Some(json!({
++            "delivery_method":null,
++            "lxmf_message":{"destination_hash":destination,"content":"hello"}
++        })),
++    )
++    .await;
++    assert_eq!(status, StatusCode::OK);
++    daemon
++        .accept_announce_with_details(destination.into(), 1, Some("Alice".into()), None)
++        .expect("announce");
++    let (_, listed) = call(app.clone(), "GET", "/api/v1/lxmf/conversations", None).await;
++    assert_eq!(listed["conversations"][0]["display_name"], "Alice");
++
++    // The peer's announce and live record are gone, then it reappears without a name.
++    daemon
++        .handle_rpc(RpcRequest { id: 1, method: "clear_peers".into(), params: None })
++        .expect("clear peers");
++    daemon.accept_announce(destination.into(), 2).expect("nameless announce");
++    let (_, listed) = call(app, "GET", "/api/v1/lxmf/conversations", None).await;
++    assert_eq!(listed["conversations"][0]["display_name"], "Alice");
++}
++
++#[test]
++fn local_state_without_peer_names_still_loads() {
++    let state: LocalState = serde_json::from_value(json!({
++        "config":{},"favourites":{},"display_names":{},"read_at":{}
++    }))
++    .expect("older state file");
++    assert!(state.peer_names.is_empty());
++}
+diff --git a/crates/libs/rns-rpc/src/rpc/daemon/dispatch_legacy_messages_parts/rpcdaemon_sections/handle_rpc_legacy_message_catalog.rs b/crates/libs/rns-rpc/src/rpc/daemon/dispatch_legacy_messages_parts/rpcdaemon_sections/handle_rpc_legacy_message_catalog.rs
+index 3c7af1d9..a92e6479 100644
+--- a/crates/libs/rns-rpc/src/rpc/daemon/dispatch_legacy_messages_parts/rpcdaemon_sections/handle_rpc_legacy_message_catalog.rs
++++ b/crates/libs/rns-rpc/src/rpc/daemon/dispatch_legacy_messages_parts/rpcdaemon_sections/handle_rpc_legacy_message_catalog.rs
+@@ -33,11 +33,11 @@ impl RpcDaemon {
+                         peer_names.entry(announce.peer.to_ascii_lowercase()).or_insert(name);
+                     }
+                 }
++                // A live peer without a name must not hide the name its stored announce carried.
+                 for peer in self.peers.lock().expect("peers mutex poisoned").values() {
+-                    peer_names.insert(
+-                        peer.peer.to_ascii_lowercase(),
+-                        peer.name.clone().unwrap_or_else(|| peer.peer.clone()),
+-                    );
++                    if let Some(name) = peer.name.as_ref().filter(|name| !name.trim().is_empty()) {
++                        peer_names.insert(peer.peer.to_ascii_lowercase(), name.clone());
++                    }
+                 }
+                 let mut conversations = Vec::<JsonValue>::new();
+                 for record in records {

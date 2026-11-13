@@ -19,11 +19,16 @@ for (const headless of [false, true]) {
                 app: {
                     isPackaged: true, getPath: name => `/test/${name}`,
                     whenReady: () => ({ then: callback => { start = callback; } }),
+                    requestSingleInstanceLock: () => true,
                     on() {}, quit() { quits++; },
                 },
                 ipcMain: { handle() {} },
+                Menu: { buildFromTemplate: () => ({}) },
+                nativeImage: { createFromPath: () => ({ resize: () => ({}) }) },
+                Tray: class { setToolTip() {} setContextMenu() {} on() {} },
                 BrowserWindow: class {
                     webContents = { setWindowOpenHandler() {} };
+                    on() {}
                     async loadFile() {}
                 },
             };
@@ -73,7 +78,7 @@ test('startup launches the profile selected by the import offer', async () => {
     let selected = false;
     let spawned;
     const electron = {
-        app: { isPackaged: true, getPath: name => `/test/${name}`, whenReady: () => ({ then: callback => { start = callback; } }), on() {}, quit() {} },
+        app: { isPackaged: true, getPath: name => `/test/${name}`, whenReady: () => ({ then: callback => { start = callback; } }), requestSingleInstanceLock: () => true, on() {}, quit() {} },
         ipcMain: { handle() {} },
     };
     vm.runInNewContext(fs.readFileSync(path.join(__dirname, 'main.js'), 'utf8'), {
@@ -114,7 +119,7 @@ test('identity manager IPC only accepts the app window and prevents concurrent d
     let opened = 0;
     const sender = {};
     const electron = {
-        app: { isPackaged: true, getPath: () => '/test', whenReady: () => ({ then: callback => { start = callback; } }), on() {}, quit() {} },
+        app: { isPackaged: true, getPath: () => '/test', whenReady: () => ({ then: callback => { start = callback; } }), requestSingleInstanceLock: () => true, on() {}, quit() {} },
         ipcMain: { handle: (name, fn) => { if (name === 'manage-identities') manage = fn; } },
         BrowserWindow: class { webContents = Object.assign(sender, { setWindowOpenHandler() {} }); async loadFile() {} },
     };

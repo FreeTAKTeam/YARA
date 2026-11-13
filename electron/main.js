@@ -1,4 +1,4 @@
-const { app, BrowserWindow, dialog, ipcMain, shell, systemPreferences } = require('electron');
+const { app, BrowserWindow, Menu, Tray, dialog, ipcMain, nativeImage, shell, systemPreferences } = require('electron');
 const electronPrompt = require('electron-prompt');
 const { spawn } = require('child_process');
 const fs = require('fs');
@@ -15,6 +15,39 @@ var quitting = false;
 var backendStopping = false;
 var rustPlan = null;
 var identityManagerOpen = false;
+var tray = null;
+var trayHintShown = false;
+
+// On Windows, closing the window keeps YARA running in the notification area so messages keep arriving.
+const keepRunningInTray = process.platform === 'win32';
+
+// a second launch would collide with this instance's daemon port, so it reopens this window instead
+const singleInstance = app.requestSingleInstanceLock();
+if(!singleInstance){
+    quitting = true;
+    app.quit();
+} else {
+    app.on('second-instance', () => showMainWindow());
+}
+
+function showMainWindow() {
+    if(!mainWindow || mainWindow.isDestroyed()) return;
+    if(mainWindow.isMinimized()) mainWindow.restore();
+    mainWindow.show();
+    mainWindow.focus();
+}
+
+function createTray() {
+    const icon = nativeImage.createFromPath(path.join(__dirname, 'build', 'icon.png')).resize({ width: 16, height: 16 });
+    tray = new Tray(icon);
+    tray.setToolTip('YARA');
+    tray.setContextMenu(Menu.buildFromTemplate([
+        { label: 'Show YARA', click: () => showMainWindow() },
+        { type: 'separator' },
+        { label: 'Quit YARA', click: () => app.quit() },
+    ]));
+    tray.on('click', () => showMainWindow());
+}
 
 // remember child process for exe so we can kill it when app exits
 var exeChildProcess = null;
@@ -163,6 +196,9 @@ function getDefaultReticulumConfigDir() {
 
 app.whenReady().then(async () => {
 
+    // another instance already owns the daemon and window
+    if(quitting) return;
+
     // get arguments passed to application, and remove the provided application path
     const ignoredArguments = ["--no-sandbox", "--ozone-platform-hint=auto"];
     const userProvidedArguments = process.argv.slice(1).filter((arg) => !ignoredArguments.includes(arg));
@@ -221,6 +257,22 @@ app.whenReady().then(async () => {
                 preload: path.join(__dirname, 'preload.js'),
             },
         });
+
+        if(keepRunningInTray){
+            createTray();
+            mainWindow.on('close', (event) => {
+                if(quitting) return;
+                event.preventDefault();
+                mainWindow.hide();
+                if(!trayHintShown){
+                    trayHintShown = true;
+                    tray.displayBalloon({
+                        title: 'YARA is still running',
+                        content: 'YARA keeps receiving messages in the background. Use the tray icon to reopen or quit it.',
+                    });
+                }
+            });
+        }
 
         // open external links in default web browser instead of electron
         mainWindow.webContents.setWindowOpenHandler(({ url }) => {
@@ -334,6 +386,9 @@ app.whenReady().then(async () => {
                 return;
             }
 
+            // bring back a window hidden in the tray so the error dialog is visible
+            showMainWindow();
+
             // tell user that Visual C++ redistributable needs to be installed on Windows
             if(code === 3221225781 && process.platform === "win32"){
                 await dialog.showMessageBox(mainWindow, {
@@ -394,6 +449,11 @@ app.on('before-quit', (event) => {
 
 app.on('window-all-closed', () => {
     app.quit();
+});
+
+app.on('will-quit', () => {
+    tray?.destroy();
+    tray = null;
 });
 
 // quit through before-quit when the app is signalled (logout, kill, Ctrl+C), so the daemon is not orphaned
