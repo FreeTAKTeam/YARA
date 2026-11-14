@@ -1,6 +1,6 @@
 {
   "name": "yara",
-  "version": "1.0.0-beta.3",
+  "version": "1.0.0-beta.4",
   "description": "Superfast, lightweight Reticulum chat client",
   "author": "FreeTAKTeam",
   "main": "electron/main.js",

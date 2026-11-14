@@ -1,7 +1,7 @@
 # Using YARA
 
 YARA is a superfast, lightweight Reticulum chat client built on the LXMF-rs daemon.
-The current release is **v1.0.0-beta.3**. It bundles the frontend and
+The current release is **v1.0.0-beta.4**. It bundles the frontend and
 LXMF-rs at commit `1e0e7ef1d6a4e7a5e5832bee1e139a1e15673f45`
 (v0.16.0 plus the interface-discovery and display-name API from
 [LXMF-rs #713](https://github.com/FreeTAKTeam/LXMF-rs/pull/713)). The daemon and
